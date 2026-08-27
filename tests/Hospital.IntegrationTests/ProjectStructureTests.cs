@@ -6,7 +6,7 @@ namespace Hospital.IntegrationTests;
 
 public sealed class DatabaseFirstCrudTests
 {
-    private static readonly string ConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__HospitalManagementDb") ?? "Server=localhost;Database=HospitalManagementDb;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True";
+    private static readonly string ConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__HospitalManagementDb") ?? "Server=localhost,1433;Database=HospitalManagementDb;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True";
 
     [Fact]
     public async Task CanReadWriteUpdateAndDeleteEveryMvpEntity()

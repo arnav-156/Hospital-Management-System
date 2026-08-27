@@ -4,7 +4,9 @@ using Hospital.Application.DTOs;
 using Hospital.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 namespace Hospital.Api.Controllers;
+
 [ApiController]
 [Authorize]
 [Route("api/notifications")]

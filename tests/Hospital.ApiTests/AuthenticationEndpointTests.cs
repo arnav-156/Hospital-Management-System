@@ -537,7 +537,7 @@ internal sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Jwt__Audience", Audience);
         Environment.SetEnvironmentVariable("Jwt__SigningKey", SigningKey);
         Environment.SetEnvironmentVariable("Jwt__AccessTokenLifetimeMinutes", "60");
-        Environment.SetEnvironmentVariable("ConnectionStrings__HospitalManagementDb", Environment.GetEnvironmentVariable("ConnectionStrings__HospitalManagementDb") ?? "Server=localhost;Database=HospitalManagementDb;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True");
+        Environment.SetEnvironmentVariable("ConnectionStrings__HospitalManagementDb", Environment.GetEnvironmentVariable("ConnectionStrings__HospitalManagementDb") ?? "Server=localhost,1433;Database=HospitalManagementDb;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True");
         Environment.SetEnvironmentVariable("OpenAi__Enabled", "false");
     }
 

@@ -1,4 +1,6 @@
 ﻿using Hospital.Application.DTOs.Appointments;
 using Hospital.Application.DTOs;
+
 namespace Hospital.Application.Interfaces;
+
 public interface IAppointmentService { Task<IReadOnlyList<DateTime>> GetAvailableSlotsAsync(int doctorId, DateOnly appointmentDate, CancellationToken ct); Task<AppointmentDto> CreateAsync(int userId, CreateAppointmentRequest request, CancellationToken ct); Task<IReadOnlyList<AppointmentDto>> GetPatientAppointmentsAsync(int userId, PaginationRequest pagination, CancellationToken ct); Task<AppointmentDto> GetPatientAppointmentAsync(int userId, int appointmentId, CancellationToken ct); Task<IReadOnlyList<AppointmentDto>> GetDoctorAppointmentsAsync(int userId, bool today, PaginationRequest pagination, CancellationToken ct); Task<AppointmentDto> DecideAsync(int userId, int appointmentId, bool accepted, string? note, CancellationToken ct); }
