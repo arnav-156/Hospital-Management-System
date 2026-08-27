@@ -2,7 +2,7 @@ root = true
 
 [*.{cs,csproj,props,targets}]
 charset = utf-8-bom
-end_of_line = crlf
+end_of_line = lf
 indent_style = space
 indent_size = 4
 insert_final_newline = true
