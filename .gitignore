@@ -1,0 +1,30 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDE settings
+.vs/
+.vscode/
+*.rsuser
+
+# Frontend dependencies and output
+client/hospital-web/node_modules/
+client/hospital-web/dist/
+client/hospital-web/.vite/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+
+# OS files
+.DS_Store
+Thumbs.db

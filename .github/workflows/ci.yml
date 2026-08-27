@@ -1,0 +1,93 @@
+name: Build and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/hospital-web/package-lock.json
+
+      - name: Create ephemeral SQL Server password
+        run: |
+          SQL_PASSWORD="HmsCi!$(openssl rand -hex 16)"
+          echo "SQL_PASSWORD=$SQL_PASSWORD" >> "$GITHUB_ENV"
+          echo "ConnectionStrings__HospitalManagementDb=Server=localhost,1433;Database=HospitalManagementDb;User Id=sa;Password=$SQL_PASSWORD;Encrypt=True;TrustServerCertificate=True" >> "$GITHUB_ENV"
+
+      - name: Start SQL Server
+        run: |
+          docker run --detach --name hospital-sql \
+            --env ACCEPT_EULA=Y \
+            --env MSSQL_SA_PASSWORD="$SQL_PASSWORD" \
+            --publish 1433:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for attempt in {1..30}; do
+            if docker exec hospital-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SQL_PASSWORD" -C -Q "SELECT 1"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs hospital-sql
+          exit 1
+
+      - name: Initialize test database
+        run: |
+          docker cp database hospital-sql:/workspace/database
+          docker exec hospital-sql sh -c "sed -i 's|\\|/|g' /workspace/database/scripts/InitializeDatabase.sql && /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$SQL_PASSWORD' -C -i /workspace/database/scripts/InitializeDatabase.sql"
+
+      - name: Restore backend dependencies
+        run: dotnet restore HospitalManagementSystem.sln -p:NuGetAudit=false
+
+      - name: Verify backend formatting
+        run: dotnet format whitespace HospitalManagementSystem.sln --verify-no-changes --no-restore
+
+      - name: Build backend
+        run: dotnet build HospitalManagementSystem.sln --no-restore -p:NuGetAudit=false -warnaserror
+
+      - name: Install frontend dependencies
+        working-directory: client/hospital-web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: client/hospital-web
+        run: npm run build
+
+      - name: Run tests
+        run: dotnet test HospitalManagementSystem.sln --no-build -p:NuGetAudit=false --logger "console;verbosity=minimal"
+
+      - name: Publish API artifact
+        run: dotnet publish src/Hospital.Api/Hospital.Api.csproj --configuration Release --no-restore --output artifacts/api -p:NuGetAudit=false
+
+      - name: Upload API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hospital-api
+          path: artifacts/api
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hospital-web
+          path: client/hospital-web/dist
