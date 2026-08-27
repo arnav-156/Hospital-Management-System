@@ -90,7 +90,7 @@ public sealed class AuthenticationEndpointTests
     public async Task RegistrationLoginAndAuthenticatedSessionWorkWithHashedPassword()
     {
         var email = NewTestEmail();
-        const string password = "Phase4SecurePassword!1";
+        const string password = "RegistrationTestPassword!1";
         using var factory = new TestWebApplicationFactory();
         using var client = factory.CreateClient();
 
@@ -143,12 +143,12 @@ public sealed class AuthenticationEndpointTests
 
         try
         {
-            var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "Phase4SecurePassword!1" });
+            var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "RegistrationTestPassword!1" });
             Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
 
             var invalidPassword = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "WrongPassword!123" });
-            var unknownUser = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = NewTestEmail(), Password = "Phase4SecurePassword!1" });
-            var duplicateRegistration = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "Phase4SecurePassword!1" });
+            var unknownUser = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = NewTestEmail(), Password = "RegistrationTestPassword!1" });
+            var duplicateRegistration = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "RegistrationTestPassword!1" });
 
             Assert.Equal(HttpStatusCode.Unauthorized, invalidPassword.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, unknownUser.StatusCode);
@@ -202,15 +202,15 @@ public sealed class AuthenticationEndpointTests
 
         try
         {
-            var registrationResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "Phase5SecurePassword!1" });
+            var registrationResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "ProfileTestPassword!1" });
             var registration = await registrationResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
             Assert.NotNull(registration);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", registration.AccessToken);
 
             var updateResponse = await client.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest
             {
-                FirstName = "Phase",
-                LastName = "Five",
+                FirstName = "Test",
+                LastName = "Patient",
                 DateOfBirth = new DateOnly(1995, 5, 20),
                 Gender = "Undisclosed",
                 PhoneNumber = "555-0199",
@@ -243,7 +243,7 @@ public sealed class AuthenticationEndpointTests
 
         try
         {
-            var registrationResponse = await patientClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "Phase5SecurePassword!1" });
+            var registrationResponse = await patientClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "ProfileTestPassword!1" });
             var registration = await registrationResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
             Assert.NotNull(registration);
 
@@ -256,7 +256,7 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.OK, (await adminClient.GetAsync("/api/admin/staff?search=Jamie")).StatusCode);
             var statusResponse = await adminClient.PatchAsJsonAsync($"/api/admin/accounts/{registration.User.UserId}/status", new UpdateAccountStatusRequest { IsActive = false });
             var status = await statusResponse.Content.ReadFromJsonAsync<UserAccountDto>();
-            var blockedLogin = await patientClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "Phase5SecurePassword!1" });
+            var blockedLogin = await patientClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "ProfileTestPassword!1" });
 
             Assert.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
             Assert.NotNull(status);
@@ -291,17 +291,17 @@ public sealed class AuthenticationEndpointTests
             var admin = await adminLogin.Content.ReadFromJsonAsync<AuthenticationResponse>();
             Assert.NotNull(admin);
             adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
-            var createResponse = await adminClient.PostAsJsonAsync("/api/departments", new SaveDepartmentRequest { DepartmentCode = departmentCode, Name = "Phase Six Department", Description = "Temporary integration-test department" });
+            var createResponse = await adminClient.PostAsJsonAsync("/api/departments", new SaveDepartmentRequest { DepartmentCode = departmentCode, Name = "Temporary Department", Description = "Temporary integration-test department" });
             var created = await createResponse.Content.ReadFromJsonAsync<DepartmentDto>();
             Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
             Assert.NotNull(created);
             createdDepartmentId = created.DepartmentId;
 
-            var updateResponse = await adminClient.PutAsJsonAsync($"/api/departments/{createdDepartmentId}", new SaveDepartmentRequest { DepartmentCode = departmentCode, Name = "Phase Six Updated", IsActive = true });
+            var updateResponse = await adminClient.PutAsJsonAsync($"/api/departments/{createdDepartmentId}", new SaveDepartmentRequest { DepartmentCode = departmentCode, Name = "Updated Temporary Department", IsActive = true });
             var updated = await updateResponse.Content.ReadFromJsonAsync<DepartmentDto>();
             Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
             Assert.NotNull(updated);
-            Assert.Equal("Phase Six Updated", updated.Name);
+            Assert.Equal("Updated Temporary Department", updated.Name);
 
             var patientToken = CreateToken(UserRoles.Patient, DateTime.UtcNow.AddMinutes(10));
             publicClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", patientToken);
@@ -358,8 +358,8 @@ public sealed class AuthenticationEndpointTests
         var email = NewTestEmail(); using var factory = new TestWebApplicationFactory(); using var patient = factory.CreateClient(); using var doctor = factory.CreateClient();
         try
         {
-            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "Phase7SecurePassword!1" }); var auth = await registration.Content.ReadFromJsonAsync<AuthenticationResponse>(); Assert.NotNull(auth); patient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-            var profileResponse = await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Phase", LastName = "Seven", DateOfBirth = new DateOnly(1990, 1, 1) }); var profile = await profileResponse.Content.ReadFromJsonAsync<PatientProfileDto>(); Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode); Assert.NotNull(profile);
+            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "AppointmentTestPassword!1" }); var auth = await registration.Content.ReadFromJsonAsync<AuthenticationResponse>(); Assert.NotNull(auth); patient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+            var profileResponse = await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Test", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) }); var profile = await profileResponse.Content.ReadFromJsonAsync<PatientProfileDto>(); Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode); Assert.NotNull(profile);
             var slot = DateTime.UtcNow.Date.AddDays(2).AddHours(10);
             var createdResponse = await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = slot, Reason = "Test consultation" }); var created = await createdResponse.Content.ReadFromJsonAsync<AppointmentDto>(); Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode); Assert.NotNull(created); Assert.Equal("Pending", created.Status);
             var doctorLogin = await doctor.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "dr.ada@hospital.example", Password = "DevelopmentOnly!123" }); var doctorAuth = await doctorLogin.Content.ReadFromJsonAsync<AuthenticationResponse>(); Assert.NotNull(doctorAuth); doctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", doctorAuth.AccessToken);
@@ -391,13 +391,13 @@ public sealed class AuthenticationEndpointTests
 
         try
         {
-            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "Phase15SecurePassword!1" });
+            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "AuthorizationTestPassword!1" });
             var patientAuth = await registration.Content.ReadFromJsonAsync<AuthenticationResponse>();
             Assert.NotNull(patientAuth);
             patient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", patientAuth.AccessToken);
-            Assert.Equal(HttpStatusCode.OK, (await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Phase", LastName = "Fifteen", DateOfBirth = new DateOnly(1990, 1, 1) })).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Test", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) })).StatusCode);
 
-            var otherRegistration = await otherPatient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = otherEmail, Password = "Phase15SecurePassword!1" });
+            var otherRegistration = await otherPatient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = otherEmail, Password = "AuthorizationTestPassword!1" });
             var otherAuth = await otherRegistration.Content.ReadFromJsonAsync<AuthenticationResponse>();
             Assert.NotNull(otherAuth);
             otherPatient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", otherAuth.AccessToken);
@@ -414,7 +414,7 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.NotFound, (await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 999999, DepartmentId = 1, AppointmentDateTime = validSlot })).StatusCode);
             Assert.Equal(HttpStatusCode.Conflict, (await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = DateTime.UtcNow.Date.AddDays(20).AddHours(8).AddMinutes(15) })).StatusCode);
 
-            var createResponse = await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = validSlot, Reason = "Phase fifteen test" });
+            var createResponse = await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = validSlot, Reason = "Authorization test appointment" });
             var appointment = await createResponse.Content.ReadFromJsonAsync<AppointmentDto>();
             Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
             Assert.NotNull(appointment);
@@ -437,7 +437,7 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/treatment", new CreateTreatmentRequest { TreatmentNotes = "Complete appointment for billing validation" })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await patient.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m })).StatusCode);
 
-            var billResponse = await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m, Description = "Phase fifteen bill" });
+            var billResponse = await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m, Description = "Authorization test bill" });
             var bill = await billResponse.Content.ReadFromJsonAsync<BillDto>();
             Assert.Equal(HttpStatusCode.OK, billResponse.StatusCode);
             Assert.NotNull(bill);
@@ -503,7 +503,7 @@ public sealed class AuthenticationEndpointTests
         }
     }
 
-    private static string NewTestEmail() => $"phase4.{Guid.NewGuid():N}@example.test";
+    private static string NewTestEmail() => $"hospital.test.{Guid.NewGuid():N}@example.test";
 
     private static string CreateToken(string role, DateTime expiresAt)
     {
@@ -529,7 +529,7 @@ internal sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
     internal const string Issuer = "HospitalManagementSystem.Tests";
     internal const string Audience = "HospitalManagementSystem.Tests";
-    internal const string SigningKey = "phase4-test-signing-key-at-least-32-characters-long";
+    internal const string SigningKey = "hospital-api-test-signing-key-at-least-32-characters-long";
 
     public TestWebApplicationFactory()
     {

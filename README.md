@@ -6,7 +6,7 @@ A modular-monolith hospital management application. It supports patient, doctor,
 
 - Backend: ASP.NET Core 8, layered into API, Application, Domain, and Infrastructure projects.
 - Frontend: React with Vite.
-- Database: SQL Server, managed through versioned SQL scripts and scaffolded into EF Core in Phase 2. EF Core migrations are intentionally not used.
+- Database: SQL Server, managed through versioned SQL scripts and represented by EF Core entity types. EF Core migrations are intentionally not used.
 
 ## Repository layout
 
@@ -16,7 +16,7 @@ A modular-monolith hospital management application. It supports patient, doctor,
 
 - .NET SDK 8.0.423 or compatible 8.0 SDK
 - Node.js 22 and npm
-- SQL Server (required from Phase 1)
+- SQL Server
 
 ## Run locally
 
@@ -58,9 +58,9 @@ The database is initialized from repository SQL scripts, not EF Core migrations.
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Work is created from `main` in short-lived `feature/`, `fix/`, or `docs/` branches and merged through reviewed pull requests.
 
-## Current milestone
+## Documentation
 
-The roadmap phases through production validation are complete locally. See the handoff documentation:
+The following guides explain the system, its configuration, and operational checks:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Database](docs/DATABASE.md)
@@ -71,4 +71,4 @@ The roadmap phases through production validation are complete locally. See the h
 - [AI summary safeguards](docs/AI.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-The first hosted CI run remains pending because this workspace has no Git remote or initial commit. The included workflow is ready to run when the repository is pushed.
+The GitHub Actions workflow validates database initialization, formatting, builds, tests, and published artifacts on every push to `main`.

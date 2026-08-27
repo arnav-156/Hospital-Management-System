@@ -17,6 +17,6 @@ The project has no deployment target configured. A student-friendly production l
 ## Known limitations
 
 - No cloud host, domain, TLS certificate, or managed SQL Server has been provisioned for this local project.
-- The first hosted CI run is pending because the workspace has no initial commit or Git remote; the workflow is included and locally validated where possible.
+- GitHub Actions validates database initialization, formatting, builds, tests, and the API and web artifacts on pushes to `main`.
 - AI summaries depend on optional external provider configuration and may be unavailable; the application deliberately falls back to normal history.
-- The UI is a focused MVP and uses identifier-based appointment/treatment/billing forms rather than a calendar or payment gateway.
+- The current UI uses identifier-based appointment, treatment, and billing forms rather than a calendar or payment gateway.
