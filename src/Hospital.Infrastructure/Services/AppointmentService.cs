@@ -35,6 +35,27 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
     public async Task<IReadOnlyList<AppointmentDto>> GetPatientAppointmentsAsync(int userId, PaginationRequest pagination, CancellationToken ct) { var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found."); return (await db.Appointments.AsNoTracking().Where(a => a.PatientId == patient.PatientId).OrderByDescending(a => a.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList(); }
     public async Task<AppointmentDto> GetPatientAppointmentAsync(int userId, int appointmentId, CancellationToken ct) { var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found."); return ToDto(await db.Appointments.AsNoTracking().SingleOrDefaultAsync(a => a.AppointmentId == appointmentId && a.PatientId == patient.PatientId, ct) ?? throw new NotFoundException("Appointment not found.")); }
     public async Task<IReadOnlyList<AppointmentDto>> GetDoctorAppointmentsAsync(int userId, bool today, PaginationRequest pagination, CancellationToken ct) { var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found."); var q = db.Appointments.AsNoTracking().Where(a => a.DoctorId == doctor.DoctorId); if (today) { var day = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).ToDateTime(TimeOnly.MinValue); q = q.Where(a => a.AppointmentDateTime >= day && a.AppointmentDateTime < day.AddDays(1)); } else q = q.Where(a => a.Status == "Pending"); return (await q.OrderBy(a => a.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList(); }
+    public async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorWorkItemsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
+    {
+        var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found.");
+        return await db.Appointments.AsNoTracking()
+            .Where(appointment => appointment.DoctorId == doctor.DoctorId && appointment.Status != "Rejected" && appointment.Status != "Cancelled")
+            .OrderByDescending(appointment => appointment.AppointmentDateTime)
+            .Skip(pagination.Skip)
+            .Take(pagination.PageSize)
+            .Select(appointment => new DoctorAppointmentWorkItemDto(
+                appointment.AppointmentId,
+                appointment.PatientId,
+                appointment.Patient.FirstName + " " + appointment.Patient.LastName,
+                appointment.Patient.MedicalRecordNumber,
+                appointment.DepartmentId,
+                appointment.Doctor.Department.Name,
+                appointment.AppointmentDateTime,
+                appointment.Status,
+                appointment.Bills.Count > 0,
+                appointment.Reason))
+            .ToListAsync(ct);
+    }
     public async Task<AppointmentDto> DecideAsync(int userId, int appointmentId, bool accepted, string? note, CancellationToken ct) { var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found."); var a = await db.Appointments.SingleOrDefaultAsync(a => a.AppointmentId == appointmentId && a.DoctorId == doctor.DoctorId, ct) ?? throw new NotFoundException("Appointment not found."); if (!AppointmentWorkflowRules.CanReview(a.Status)) throw new ConflictException("Only pending appointments can be reviewed."); await using var transaction = await db.Database.BeginTransactionAsync(ct); a.Status = accepted ? "Accepted" : "Rejected"; a.DoctorResponseNote = note?.Trim(); a.UpdatedAt = clock.GetUtcNow().UtcDateTime; await db.SaveChangesAsync(ct); var patientUserId = await db.Patients.Where(p => p.PatientId == a.PatientId).Select(p => p.UserId).SingleAsync(ct); await notifications.CreateAsync(patientUserId, accepted ? "AppointmentAccepted" : "AppointmentRejected", $"Your appointment on {a.AppointmentDateTime:yyyy-MM-dd HH:mm} UTC was {a.Status.ToLowerInvariant()}.", ct); await transaction.CommitAsync(ct); return ToDto(a); }
     private static AppointmentDto ToDto(Appointment a) => new(a.AppointmentId, a.PatientId, a.DoctorId, a.DepartmentId, a.AppointmentDateTime, a.DurationMinutes, a.Status, a.Reason, a.DoctorResponseNote);
 }
