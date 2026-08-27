@@ -54,6 +54,7 @@ jobs:
 
       - name: Initialize test database
         run: |
+          docker exec hospital-sql mkdir -p /workspace
           docker cp database hospital-sql:/workspace/database
           docker exec hospital-sql sh -c "sed -i 's|\\|/|g' /workspace/database/scripts/InitializeDatabase.sql && /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$SQL_PASSWORD' -C -i /workspace/database/scripts/InitializeDatabase.sql"
 
