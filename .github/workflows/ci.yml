@@ -54,9 +54,9 @@ jobs:
 
       - name: Initialize test database
         run: |
-          docker exec hospital-sql mkdir -p /workspace
-          docker cp database hospital-sql:/workspace/database
-          docker exec hospital-sql sh -c "sed -i 's|\\|/|g' /workspace/database/scripts/InitializeDatabase.sql && /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$SQL_PASSWORD' -C -i /workspace/database/scripts/InitializeDatabase.sql"
+          docker exec hospital-sql mkdir -p /var/opt/mssql/workspace
+          docker cp database hospital-sql:/var/opt/mssql/workspace/database
+          docker exec hospital-sql sh -c "sed -i 's|\\|/|g' /var/opt/mssql/workspace/database/scripts/InitializeDatabase.sql && /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$SQL_PASSWORD' -C -i /var/opt/mssql/workspace/database/scripts/InitializeDatabase.sql"
 
       - name: Restore backend dependencies
         run: dotnet restore HospitalManagementSystem.sln -p:NuGetAudit=false
