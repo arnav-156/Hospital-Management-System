@@ -1,8 +1,10 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 using Hospital.Application.DTOs.Auth;
 using Hospital.Api.Middleware;
 using Hospital.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Data.SqlClient;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,6 +65,33 @@ builder.Services.AddCors(options => options.AddPolicy("HospitalWeb", policy =>
     policy.WithOrigins(allowedCorsOrigins).AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Database:ApplyDevelopmentSeed"))
+{
+    var seedPath = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "database", "seed", "001_DevelopmentSeedData.sql"));
+    if (!File.Exists(seedPath))
+    {
+        throw new FileNotFoundException("Development seed script was not found.", seedPath);
+    }
+
+    var seedScript = File.ReadAllText(seedPath);
+    seedScript = Regex.Replace(seedScript, @"(?m)^:setvar.*\r?\n", string.Empty)
+        .Replace("$(DatabaseName)", "HospitalManagementDb");
+
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync();
+    foreach (var batch in Regex.Split(seedScript, @"(?im)^\s*GO\s*$"))
+    {
+        if (string.IsNullOrWhiteSpace(batch))
+        {
+            continue;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = batch;
+        await command.ExecuteNonQueryAsync();
+    }
+}
 
 if (!app.Environment.IsDevelopment())
 {

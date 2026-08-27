@@ -13,14 +13,44 @@ BEGIN TRANSACTION;
 IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin@hospital.example')
     INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'admin@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Administrator');
 
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin.priya@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'admin.priya@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Administrator');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin.morgan@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'admin.morgan@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Administrator');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin.riley@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'admin.riley@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Administrator');
+
 IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'dr.ada@hospital.example')
     INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'dr.ada@hospital.example', N'AQAAAAIAAYagAAAAEL6YZAw4XwscjJzNE7xkdsH5bpHyjgja7wuKjFlh+5DJB7o8/0UZLi0hrpb2JutNuw==', 'Doctor');
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'dr.sam@hospital.example')
     INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'dr.sam@hospital.example', N'AQAAAAIAAYagAAAAEPnvPjYqwnZTVYfSthMxqkXsIuzkwGbcHo2R2coT9gKp7y7088m/Sk0RWAZvgdeeqw==', 'Doctor');
 
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'dr.maya@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'dr.maya@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Doctor');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'dr.owen@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'dr.owen@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Doctor');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'dr.priya@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'dr.priya@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Doctor');
+
 IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'patient.alex@hospital.example')
     INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'patient.alex@hospital.example', N'AQAAAAIAAYagAAAAEPf3fCOvQYm4gmwaZgRxu9MOWpnM97HjP0z2V/cOwhXfc07QoJibnyCkXM/uAM5I9w==', 'Patient');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'patient.blair@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'patient.blair@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Patient');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'patient.casey@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'patient.casey@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Patient');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'patient.drew@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'patient.drew@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Patient');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'patient.emery@hospital.example')
+    INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'patient.emery@hospital.example', N'AQAAAAIAAYagAAAAEJo/ZkEDQM3+j5v+LdnQ4uzBzttaPDSIfESYSTiVuoYNOdhgkhGv5mvUeaaI6w0HlQ==', 'Patient');
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'staff.jamie@hospital.example')
     INSERT INTO dbo.Users (Email, PasswordHash, Role) VALUES (N'staff.jamie@hospital.example', N'AQAAAAIAAYagAAAAEGIJKaeOrz/Ifqwnryd3I23B2AmsTpNLJ18ZvZYA5spGZDTWbdYx84mzTaoFQmgW3g==', 'Administrator');
@@ -31,11 +61,26 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Departments WHERE DepartmentCode = 'CARD')
 IF NOT EXISTS (SELECT 1 FROM dbo.Departments WHERE DepartmentCode = 'GEN')
     INSERT INTO dbo.Departments (DepartmentCode, Name, Description) VALUES ('GEN', N'General Medicine', N'Development general medicine department.');
 
+IF NOT EXISTS (SELECT 1 FROM dbo.Departments WHERE DepartmentCode = 'PED')
+    INSERT INTO dbo.Departments (DepartmentCode, Name, Description) VALUES ('PED', N'Pediatrics', N'Development pediatrics department.');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Departments WHERE DepartmentCode = 'ORTH')
+    INSERT INTO dbo.Departments (DepartmentCode, Name, Description) VALUES ('ORTH', N'Orthopedics', N'Development orthopedics department.');
+
 DECLARE @cardiologyDepartmentId int = (SELECT DepartmentId FROM dbo.Departments WHERE DepartmentCode = 'CARD');
 DECLARE @generalMedicineDepartmentId int = (SELECT DepartmentId FROM dbo.Departments WHERE DepartmentCode = 'GEN');
+DECLARE @pediatricsDepartmentId int = (SELECT DepartmentId FROM dbo.Departments WHERE DepartmentCode = 'PED');
+DECLARE @orthopedicsDepartmentId int = (SELECT DepartmentId FROM dbo.Departments WHERE DepartmentCode = 'ORTH');
 DECLARE @adaUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'dr.ada@hospital.example');
 DECLARE @samUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'dr.sam@hospital.example');
+DECLARE @mayaUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'dr.maya@hospital.example');
+DECLARE @owenUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'dr.owen@hospital.example');
+DECLARE @priyaDoctorUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'dr.priya@hospital.example');
 DECLARE @patientUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'patient.alex@hospital.example');
+DECLARE @blairPatientUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'patient.blair@hospital.example');
+DECLARE @caseyPatientUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'patient.casey@hospital.example');
+DECLARE @drewPatientUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'patient.drew@hospital.example');
+DECLARE @emeryPatientUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'patient.emery@hospital.example');
 DECLARE @staffUserId int = (SELECT UserId FROM dbo.Users WHERE Email = N'staff.jamie@hospital.example');
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Doctors WHERE LicenseNumber = 'DEV-LIC-1001')
@@ -46,9 +91,37 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Doctors WHERE LicenseNumber = 'DEV-LIC-1002')
     INSERT INTO dbo.Doctors (UserId, DepartmentId, LicenseNumber, FirstName, LastName, Specialization, PhoneNumber, ConsultationFee)
     VALUES (@samUserId, @generalMedicineDepartmentId, 'DEV-LIC-1002', N'Sam', N'Rao', N'General Medicine', '555-0102', 1000.00);
 
+IF NOT EXISTS (SELECT 1 FROM dbo.Doctors WHERE LicenseNumber = 'DEV-LIC-1003')
+    INSERT INTO dbo.Doctors (UserId, DepartmentId, LicenseNumber, FirstName, LastName, Specialization, PhoneNumber, ConsultationFee)
+    VALUES (@mayaUserId, @pediatricsDepartmentId, 'DEV-LIC-1003', N'Maya', N'Shah', N'Pediatrics', '555-0105', 1200.00);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Doctors WHERE LicenseNumber = 'DEV-LIC-1004')
+    INSERT INTO dbo.Doctors (UserId, DepartmentId, LicenseNumber, FirstName, LastName, Specialization, PhoneNumber, ConsultationFee)
+    VALUES (@owenUserId, @orthopedicsDepartmentId, 'DEV-LIC-1004', N'Owen', N'Patel', N'Orthopedics', '555-0106', 1800.00);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Doctors WHERE LicenseNumber = 'DEV-LIC-1005')
+    INSERT INTO dbo.Doctors (UserId, DepartmentId, LicenseNumber, FirstName, LastName, Specialization, PhoneNumber, ConsultationFee)
+    VALUES (@priyaDoctorUserId, @generalMedicineDepartmentId, 'DEV-LIC-1005', N'Priya', N'Menon', N'Family Medicine', '555-0107', 1100.00);
+
 IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE MedicalRecordNumber = 'DEV-MRN-0001')
     INSERT INTO dbo.Patients (UserId, MedicalRecordNumber, FirstName, LastName, DateOfBirth, Gender, PhoneNumber)
     VALUES (@patientUserId, 'DEV-MRN-0001', N'Alex', N'Taylor', '1990-01-15', 'Undisclosed', '555-0103');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE MedicalRecordNumber = 'DEV-MRN-0002')
+    INSERT INTO dbo.Patients (UserId, MedicalRecordNumber, FirstName, LastName, DateOfBirth, Gender, PhoneNumber)
+    VALUES (@blairPatientUserId, 'DEV-MRN-0002', N'Blair', N'Wilson', '1988-05-22', 'Female', '555-0108');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE MedicalRecordNumber = 'DEV-MRN-0003')
+    INSERT INTO dbo.Patients (UserId, MedicalRecordNumber, FirstName, LastName, DateOfBirth, Gender, PhoneNumber)
+    VALUES (@caseyPatientUserId, 'DEV-MRN-0003', N'Casey', N'Nguyen', '1995-09-11', 'NonBinary', '555-0109');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE MedicalRecordNumber = 'DEV-MRN-0004')
+    INSERT INTO dbo.Patients (UserId, MedicalRecordNumber, FirstName, LastName, DateOfBirth, Gender, PhoneNumber)
+    VALUES (@drewPatientUserId, 'DEV-MRN-0004', N'Drew', N'Garcia', '1979-02-08', 'Male', '555-0110');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE MedicalRecordNumber = 'DEV-MRN-0005')
+    INSERT INTO dbo.Patients (UserId, MedicalRecordNumber, FirstName, LastName, DateOfBirth, Gender, PhoneNumber)
+    VALUES (@emeryPatientUserId, 'DEV-MRN-0005', N'Emery', N'Bose', '2001-12-03', 'Female', '555-0111');
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Staff WHERE EmployeeNumber = 'DEV-EMP-0001')
     INSERT INTO dbo.Staff (UserId, DepartmentId, EmployeeNumber, FirstName, LastName, JobTitle, PhoneNumber)
