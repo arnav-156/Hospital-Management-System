@@ -110,7 +110,135 @@ function PatientProfileForm({ onNotice }) {
 }
 function DoctorAppointments({ onNotice, onUnauthorized }) { const [state, setState] = useState({ loading: true, error: '', records: [] }); const load = async () => { setState({ loading: true, error: '', records: [] }); try { const records = await api('/api/doctor/appointments/pending'); setState({ loading: false, error: '', records }); } catch (error) { if (error.message.includes('401')) { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); onUnauthorized(false); } setState({ loading: false, error: error.message, records: [] }); } }; useEffect(() => { load(); }, []); const decide = async (appointmentId, decision) => { try { await api(`/api/appointments/${appointmentId}/${decision}`, { method: 'PUT', body: JSON.stringify({ note: 'Updated from the doctor portal.' }) }); setState((current) => ({ ...current, records: current.records.filter((record) => record.appointmentId !== appointmentId) })); onNotice(`Appointment ${decision}ed successfully.`); } catch (error) { setState((current) => ({ ...current, error: error.message })); } }; return <section className="panel"><div className="panel-title"><h2>Pending appointments</h2><button className="secondary" onClick={load}>Refresh</button></div>{state.loading && <p>Loading live data…</p>}{state.error && <p className="error">{state.error}</p>}{!state.loading && !state.error && state.records.length === 0 && <p className="muted">No records found.</p>}{state.records.map((record) => <div className="table" key={record.appointmentId}><div><b>Appointment #{record.appointmentId} · {record.appointmentDateTime?.slice(0, 16)}</b><span className="pill">{record.status}</span><span>{record.reason || 'No reason provided'}</span></div><div><button className="secondary" onClick={() => decide(record.appointmentId, 'accept')}>Accept</button><button className="secondary" onClick={() => decide(record.appointmentId, 'reject')}>Reject</button></div></div>)}</section>; }
 function DoctorHistoryForm({ onNotice }) { const [patientId, setPatientId] = useState(''); const [result, setResult] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const submit = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { const summary = await api(`/api/patients/${Number(patientId)}/history-summary`, { method: 'POST' }); setResult(summary); onNotice(summary.aiAvailable ? 'AI summary generated for doctor review.' : 'AI is unavailable; normal history remains available.'); } catch (failure) { setError(failure.message); setResult(null); } finally { setBusy(false); } }; return <section className="panel"><h2>Patient history and AI summary</h2><form className="grid" onSubmit={submit}><label>Patient ID<input type="number" min="1" value={patientId} onChange={(event) => setPatientId(event.target.value)} required /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Generating…' : 'Generate AI summary'}</button></form>{result && <section className="panel"><h3>{result.isAiGenerated ? 'AI-generated summary' : 'Normal patient history'}</h3>{result.summary && <p>{result.summary}</p>}<p className="muted">{result.disclaimer}</p>{result.history.length === 0 ? <p className="muted">No treatment records found.</p> : <div className="table"><div><b>Date</b><b>Diagnosis</b><b>Prescription</b></div>{result.history.map((item) => <div key={item.treatmentId}><span>{item.treatmentDateTime?.slice(0, 10)}</span><span>{item.diagnosis || 'Not recorded'}</span><span>{item.prescription || 'Not recorded'}</span></div>)}</div>}</section>}</section>; }
-function BookingForm({ onNotice }) { const [doctorId, setDoctorId] = useState('1'); const [departmentId, setDepartmentId] = useState('1'); const [appointmentDateTime, setAppointmentDateTime] = useState(''); const [reason, setReason] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const submit = async (event) => { event.preventDefault(); const value = appointmentDateTime.trim(); if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) || Number.isNaN(Date.parse(value))) { setError('Enter an appointment time as YYYY-MM-DDTHH:mm.'); return; } setBusy(true); try { setError(''); await api('/api/appointments', { method: 'POST', body: JSON.stringify({ doctorId: Number(doctorId), departmentId: Number(departmentId), appointmentDateTime: value, reason }) }); onNotice('Appointment requested successfully.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }; return <section className="panel"><h2>Request an appointment</h2><form className="grid" onSubmit={submit}><label>Department ID<input value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} required /></label><label>Doctor ID<input value={doctorId} onChange={(event) => setDoctorId(event.target.value)} required /></label><label className="wide">Appointment time (YYYY-MM-DDTHH:mm)<input value={appointmentDateTime} onChange={(event) => setAppointmentDateTime(event.target.value)} pattern="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}" placeholder="2030-01-02T10:00" required /></label><label className="wide">Reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Requesting…' : 'Request appointment'}</button></form></section>; }
+function BookingForm({ onNotice }) {
+  const [departments, setDepartments] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [slots, setSlots] = useState([]);
+  const [departmentId, setDepartmentId] = useState('');
+  const [doctorId, setDoctorId] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentDateTime, setAppointmentDateTime] = useState('');
+  const [reason, setReason] = useState('');
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api('/api/departments?pageSize=100')
+      .then((records) => { if (active) setDepartments(records); })
+      .catch((failure) => { if (active) setError(failure.message); })
+      .finally(() => { if (active) setLoadingCatalog(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!departmentId) {
+      setDoctors([]);
+      return undefined;
+    }
+    let active = true;
+    setLoadingDoctors(true);
+    api(`/api/departments/${departmentId}/doctors?pageSize=100`)
+      .then((records) => { if (active) setDoctors(records); })
+      .catch((failure) => { if (active) setError(failure.message); })
+      .finally(() => { if (active) setLoadingDoctors(false); });
+    return () => { active = false; };
+  }, [departmentId]);
+
+  useEffect(() => {
+    if (!doctorId || !appointmentDate) {
+      setSlots([]);
+      return undefined;
+    }
+    let active = true;
+    setLoadingSlots(true);
+    api(`/api/doctors/${doctorId}/slots?date=${appointmentDate}`)
+      .then((records) => { if (active) setSlots(records); })
+      .catch((failure) => { if (active) setError(failure.message); })
+      .finally(() => { if (active) setLoadingSlots(false); });
+    return () => { active = false; };
+  }, [doctorId, appointmentDate]);
+
+  const chooseDepartment = (event) => {
+    setDepartmentId(event.target.value);
+    setDoctorId('');
+    setAppointmentDate('');
+    setAppointmentDateTime('');
+    setSlots([]);
+    setError('');
+  };
+
+  const chooseDoctor = (event) => {
+    setDoctorId(event.target.value);
+    setAppointmentDate('');
+    setAppointmentDateTime('');
+    setSlots([]);
+    setError('');
+  };
+
+  const chooseDate = (event) => {
+    setAppointmentDate(event.target.value);
+    setAppointmentDateTime('');
+    setError('');
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!departmentId || !doctorId || !appointmentDateTime) {
+      setError('Choose a department, doctor, date, and available appointment time.');
+      return;
+    }
+    setBusy(true);
+    try {
+      setError('');
+      await api('/api/appointments', { method: 'POST', body: JSON.stringify({ doctorId: Number(doctorId), departmentId: Number(departmentId), appointmentDateTime, reason }) });
+      onNotice('Appointment requested successfully.');
+      setAppointmentDateTime('');
+      setSlots((current) => current.filter((slot) => slot !== appointmentDateTime));
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const minimumDate = new Date().toISOString().slice(0, 10);
+  return <section className="panel">
+    <h2>Request an appointment</h2>
+    <p className="muted">Choose the care team and a currently available time. Internal record IDs are never required.</p>
+    <form className="grid" onSubmit={submit}>
+      <label htmlFor="booking-department">Department
+        <select id="booking-department" value={departmentId} onChange={chooseDepartment} disabled={loadingCatalog} required>
+          <option value="">{loadingCatalog ? 'Loading departments…' : 'Choose a department'}</option>
+          {departments.map((department) => <option key={department.departmentId} value={department.departmentId}>{department.name}{department.description ? ` — ${department.description}` : ''}</option>)}
+        </select>
+      </label>
+      <label htmlFor="booking-doctor">Doctor
+        <select id="booking-doctor" value={doctorId} onChange={chooseDoctor} disabled={!departmentId || loadingDoctors} required>
+          <option value="">{loadingDoctors ? 'Loading doctors…' : departmentId ? 'Choose a doctor' : 'Choose a department first'}</option>
+          {doctors.map((doctor) => <option key={doctor.doctorId} value={doctor.doctorId}>Dr. {doctor.firstName} {doctor.lastName} — {doctor.specialization} · ₹{doctor.consultationFee}</option>)}
+        </select>
+      </label>
+      <label htmlFor="booking-date">Appointment date
+        <input id="booking-date" type="date" value={appointmentDate} onChange={chooseDate} onInput={chooseDate} min={minimumDate} disabled={!doctorId} required />
+      </label>
+      <label htmlFor="booking-slot">Available time
+        <select id="booking-slot" value={appointmentDateTime} onChange={(event) => setAppointmentDateTime(event.target.value)} disabled={!appointmentDate || loadingSlots} required>
+          <option value="">{loadingSlots ? 'Loading available times…' : appointmentDate ? (slots.length ? 'Choose a time' : 'No times available') : 'Choose a date first'}</option>
+          {slots.map((slot) => <option key={slot} value={slot}>{slot.slice(11, 16)} UTC</option>)}
+        </select>
+      </label>
+      <label className="wide" htmlFor="booking-reason">Reason
+        <textarea id="booking-reason" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Briefly describe what you need help with." />
+      </label>
+      {error && <p className="error">{error}</p>}
+      <button className="primary" disabled={busy || loadingCatalog || !departments.length}>{busy ? 'Requesting…' : 'Request appointment'}</button>
+    </form>
+  </section>;
+}
 function FeedbackForm({ onNotice }) { const [appointmentId, setAppointmentId] = useState(''); const [rating, setRating] = useState('5'); const [comments, setComments] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const submit = async (event) => { event.preventDefault(); setBusy(true); try { setError(''); await api('/api/feedback', { method: 'POST', body: JSON.stringify({ appointmentId: Number(appointmentId), rating: Number(rating), comments }) }); onNotice('Feedback saved. Thank you.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }; return <section className="panel"><h2>Share feedback</h2><form className="grid" onSubmit={submit}><label>Completed appointment ID<input value={appointmentId} onChange={(event) => setAppointmentId(event.target.value)} required /></label><label>Rating<select value={rating} onChange={(event) => setRating(event.target.value)}>{[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label className="wide">Comments<textarea value={comments} onChange={(event) => setComments(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit feedback'}</button></form></section>; }
 function TreatmentForm({ onNotice }) { const [appointmentId, setAppointmentId] = useState(''); const [diagnosis, setDiagnosis] = useState(''); const [prescription, setPrescription] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const submit = async (event) => { event.preventDefault(); setBusy(true); try { setError(''); await api(`/api/appointments/${appointmentId}/treatment`, { method: 'POST', body: JSON.stringify({ diagnosis, prescription }) }); onNotice('Treatment recorded.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }; return <section className="panel"><h2>Record treatment</h2><form className="grid" onSubmit={submit}><label>Accepted appointment ID<input value={appointmentId} onChange={(event) => setAppointmentId(event.target.value)} required /></label><label>Diagnosis<input value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} /></label><label className="wide">Prescription<textarea value={prescription} onChange={(event) => setPrescription(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save treatment'}</button></form></section>; }
 function BillingForm({ onNotice }) { const [appointmentId, setAppointmentId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const submit = async (event) => { event.preventDefault(); setBusy(true); try { setError(''); await api(`/api/appointments/${appointmentId}/bill`, { method: 'POST', body: JSON.stringify({ amount: Number(amount), description }) }); onNotice('Bill generated.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }; return <section className="panel"><h2>Generate bill</h2><form className="grid" onSubmit={submit}><label>Completed appointment ID<input value={appointmentId} onChange={(event) => setAppointmentId(event.target.value)} required /></label><label>Amount<input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></label><label className="wide">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Generating…' : 'Generate bill'}</button></form></section>; }
