@@ -13,6 +13,9 @@ public sealed class CatalogService(HospitalManagementDbContext dbContext, TimePr
     public async Task<IReadOnlyList<DepartmentDto>> GetDepartmentsAsync(PaginationRequest pagination, CancellationToken cancellationToken) =>
         await dbContext.Departments.AsNoTracking().Where(department => department.IsActive).OrderBy(department => department.Name).Skip(pagination.Skip).Take(pagination.PageSize).Select(department => ToDto(department)).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<DepartmentDto>> GetAllDepartmentsAsync(PaginationRequest pagination, CancellationToken cancellationToken) =>
+        await dbContext.Departments.AsNoTracking().OrderBy(department => department.Name).Skip(pagination.Skip).Take(pagination.PageSize).Select(department => ToDto(department)).ToListAsync(cancellationToken);
+
     public async Task<DepartmentDto> GetDepartmentAsync(int departmentId, CancellationToken cancellationToken) =>
         await dbContext.Departments.AsNoTracking().Where(department => department.DepartmentId == departmentId && department.IsActive).Select(department => ToDto(department)).SingleOrDefaultAsync(cancellationToken) ?? throw new NotFoundException("Department not found.");
 

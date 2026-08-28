@@ -6,6 +6,7 @@ namespace Hospital.Application.Interfaces;
 public interface ICatalogService
 {
     Task<IReadOnlyList<DepartmentDto>> GetDepartmentsAsync(PaginationRequest pagination, CancellationToken cancellationToken);
+    Task<IReadOnlyList<DepartmentDto>> GetAllDepartmentsAsync(PaginationRequest pagination, CancellationToken cancellationToken);
     Task<DepartmentDto> GetDepartmentAsync(int departmentId, CancellationToken cancellationToken);
     Task<DepartmentDto> CreateDepartmentAsync(SaveDepartmentRequest request, CancellationToken cancellationToken);
     Task<DepartmentDto> UpdateDepartmentAsync(int departmentId, SaveDepartmentRequest request, CancellationToken cancellationToken);

@@ -311,6 +311,18 @@ public sealed class AuthenticationEndpointTests
             Assert.NotNull(updated);
             Assert.Equal("Updated Temporary Department", updated.Name);
 
+            var deactivateResponse = await adminClient.PutAsJsonAsync($"/api/departments/{createdDepartmentId}", new SaveDepartmentRequest { DepartmentCode = departmentCode, Name = "Updated Temporary Department", IsActive = false });
+            Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+
+            var administratorDepartmentsResponse = await adminClient.GetAsync("/api/admin/departments?pageSize=100");
+            var administratorDepartments = await administratorDepartmentsResponse.Content.ReadFromJsonAsync<List<DepartmentDto>>();
+            var publicDepartmentsAfterDeactivation = await publicClient.GetFromJsonAsync<List<DepartmentDto>>("/api/departments?pageSize=100");
+            Assert.Equal(HttpStatusCode.OK, administratorDepartmentsResponse.StatusCode);
+            Assert.NotNull(administratorDepartments);
+            Assert.Contains(administratorDepartments, department => department.DepartmentId == createdDepartmentId && !department.IsActive);
+            Assert.NotNull(publicDepartmentsAfterDeactivation);
+            Assert.DoesNotContain(publicDepartmentsAfterDeactivation, department => department.DepartmentId == createdDepartmentId);
+
             var patientToken = CreateToken(UserRoles.Patient, DateTime.UtcNow.AddMinutes(10));
             publicClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", patientToken);
             Assert.Equal(HttpStatusCode.Forbidden, (await publicClient.PostAsJsonAsync("/api/departments", new SaveDepartmentRequest { DepartmentCode = "DENIED", Name = "Denied" })).StatusCode);
