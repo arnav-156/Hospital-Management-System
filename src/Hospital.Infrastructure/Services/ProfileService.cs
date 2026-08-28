@@ -41,7 +41,7 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
         patient.FirstName = request.FirstName.Trim();
         patient.LastName = request.LastName.Trim();
         patient.DateOfBirth = request.DateOfBirth.Value;
-        patient.Gender = request.Gender?.Trim();
+        patient.Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
         patient.PhoneNumber = request.PhoneNumber?.Trim();
         patient.Address = request.Address?.Trim();
         patient.EmergencyContactName = request.EmergencyContactName?.Trim();

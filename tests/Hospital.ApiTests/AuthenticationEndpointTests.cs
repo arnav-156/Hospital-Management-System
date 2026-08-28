@@ -227,6 +227,8 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(updated.PatientId, current.PatientId);
             Assert.Equal(email, current.Email);
             Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Test", LastName = "Patient", DateOfBirth = new DateOnly(1995, 5, 20), Gender = "Not a valid option" })).StatusCode);
+            var blankGenderResponse = await client.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Test", LastName = "Patient", DateOfBirth = new DateOnly(1995, 5, 20), Gender = "" });
+            Assert.Null((await blankGenderResponse.Content.ReadFromJsonAsync<PatientProfileDto>())!.Gender);
         }
         finally
         {
