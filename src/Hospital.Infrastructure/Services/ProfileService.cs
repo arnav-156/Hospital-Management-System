@@ -87,5 +87,5 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
 
     private static PatientProfileDto ToDto(Patient patient) => new(patient.UserId, patient.PatientId, patient.User.Email, patient.MedicalRecordNumber, patient.FirstName, patient.LastName, patient.DateOfBirth, patient.Gender, patient.PhoneNumber, patient.Address, patient.EmergencyContactName, patient.EmergencyContactPhone);
     private static DoctorProfileDto ToDto(Doctor doctor) => new(doctor.UserId, doctor.DoctorId, doctor.User.Email, doctor.FirstName, doctor.LastName, doctor.LicenseNumber, doctor.Specialization, doctor.Department.Name, doctor.PhoneNumber, doctor.ConsultationFee, doctor.IsActive);
-    private static StaffProfileDto ToDto(Staff staff) => new(staff.UserId, staff.StaffId, staff.User.Email, staff.FirstName, staff.LastName, staff.EmployeeNumber, staff.JobTitle, staff.Department?.Name, staff.PhoneNumber, staff.IsActive);
+    private static StaffProfileDto ToDto(Staff staff) => new(staff.UserId, staff.StaffId, staff.User.Email, staff.FirstName, staff.LastName, staff.EmployeeNumber, staff.JobTitle, staff.Department?.Name, staff.PhoneNumber, staff.IsActive, staff.User.IsActive);
 }

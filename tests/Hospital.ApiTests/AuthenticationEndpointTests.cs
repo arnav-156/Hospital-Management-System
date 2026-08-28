@@ -253,7 +253,11 @@ public sealed class AuthenticationEndpointTests
             adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
 
             Assert.Equal(HttpStatusCode.OK, (await adminClient.GetAsync("/api/admin/doctors?search=Ada")).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await adminClient.GetAsync("/api/admin/staff?search=Jamie")).StatusCode);
+            var staffResponse = await adminClient.GetAsync("/api/admin/staff?search=Jamie");
+            var staff = await staffResponse.Content.ReadFromJsonAsync<List<StaffProfileDto>>();
+            Assert.Equal(HttpStatusCode.OK, staffResponse.StatusCode);
+            Assert.NotNull(staff);
+            Assert.Contains(staff, member => member.IsAccountActive);
             var statusResponse = await adminClient.PatchAsJsonAsync($"/api/admin/accounts/{registration.User.UserId}/status", new UpdateAccountStatusRequest { IsActive = false });
             var status = await statusResponse.Content.ReadFromJsonAsync<UserAccountDto>();
             var blockedLogin = await patientClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "ProfileTestPassword!1" });
