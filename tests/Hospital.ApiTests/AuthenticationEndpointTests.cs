@@ -398,6 +398,8 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.NotFound, (await doctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
             var accepted = await doctor.PutAsJsonAsync($"/api/appointments/{created.AppointmentId}/accept", new AppointmentDecisionRequest { Note = "Confirmed" }); var decision = await accepted.Content.ReadFromJsonAsync<AppointmentDto>(); Assert.Equal(HttpStatusCode.OK, accepted.StatusCode); Assert.NotNull(decision); Assert.Equal("Accepted", decision.Status);
             Assert.Equal("Accepted", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{created.AppointmentId}"))!.Status);
+            Assert.Equal(HttpStatusCode.BadRequest, (await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "   " })).StatusCode);
+            Assert.Equal("Accepted", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{created.AppointmentId}"))!.Status);
             var treatmentResponse = await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Test diagnosis", Prescription = "Test prescription", ProgressNotes = "Stable" }); var treatment = await treatmentResponse.Content.ReadFromJsonAsync<TreatmentDto>(); Assert.Equal(HttpStatusCode.OK, treatmentResponse.StatusCode); Assert.NotNull(treatment);
             Assert.Contains(await patient.GetFromJsonAsync<List<TreatmentDto>>($"/api/patients/{profile.PatientId}/history") ?? [], item => item.TreatmentId == treatment.TreatmentId);
             var summaryResponse = await doctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null); var summary = await summaryResponse.Content.ReadFromJsonAsync<MedicalHistorySummaryDto>(); Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode); Assert.NotNull(summary); Assert.False(summary.AiAvailable); Assert.False(summary.IsAiGenerated); Assert.Null(summary.Summary); Assert.Contains("AI summary is currently unavailable", summary.Disclaimer); Assert.Contains(summary.History, item => item.TreatmentId == treatment.TreatmentId);
@@ -479,7 +481,7 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.Created, completedAppointmentResponse.StatusCode);
             Assert.NotNull(completedAppointment);
             Assert.Equal(HttpStatusCode.OK, (await doctor.PutAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/accept", new AppointmentDecisionRequest())).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/treatment", new CreateTreatmentRequest { TreatmentNotes = "Complete appointment for billing validation" })).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Billing validation diagnosis", TreatmentNotes = "Complete appointment for billing validation" })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await patient.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m })).StatusCode);
 
             var billResponse = await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m, Description = "Authorization test bill" });
