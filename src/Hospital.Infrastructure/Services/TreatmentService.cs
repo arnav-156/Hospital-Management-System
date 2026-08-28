@@ -38,7 +38,7 @@ public sealed class TreatmentService(HospitalManagementDbContext dbContext, Time
             if (!authorized) throw new NotFoundException("Patient history not found.");
         }
         else throw new NotFoundException("Patient history not found.");
-        return (await dbContext.Treatments.AsNoTracking().Where(treatment => treatment.PatientId == patientId).OrderByDescending(treatment => treatment.TreatmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(cancellationToken)).Select(ToDto).ToList();
+        return await dbContext.Treatments.AsNoTracking().Where(treatment => treatment.PatientId == patientId).OrderByDescending(treatment => treatment.TreatmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(treatment => new TreatmentDto(treatment.TreatmentId, treatment.AppointmentId, treatment.PatientId, treatment.DoctorId, treatment.Diagnosis, treatment.Prescription, treatment.ProgressNotes, treatment.TreatmentNotes, treatment.TreatmentDateTime, treatment.Appointment.Doctor.FirstName + " " + treatment.Appointment.Doctor.LastName)).ToListAsync(cancellationToken);
     }
     private static TreatmentDto ToDto(Treatment treatment) => new(treatment.TreatmentId, treatment.AppointmentId, treatment.PatientId, treatment.DoctorId, treatment.Diagnosis, treatment.Prescription, treatment.ProgressNotes, treatment.TreatmentNotes, treatment.TreatmentDateTime);
 }
