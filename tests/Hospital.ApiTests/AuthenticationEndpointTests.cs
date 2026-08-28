@@ -407,6 +407,18 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(bill.BillId, (await patient.GetFromJsonAsync<BillDto>($"/api/bills/{bill.BillId}"))!.BillId);
             var notifications = await patient.GetFromJsonAsync<List<NotificationDto>>("/api/notifications"); Assert.NotNull(notifications); var notification = Assert.Single(notifications, item => item.NotificationType == "BillGenerated"); var read = await patient.PutAsync($"/api/notifications/{notification.NotificationId}/read", null); Assert.Equal(HttpStatusCode.OK, read.StatusCode);
             var feedbackResponse = await patient.PostAsJsonAsync("/api/feedback", new CreateFeedbackRequest { AppointmentId = created.AppointmentId, Rating = 5, Comments = "Excellent" }); var feedback = await feedbackResponse.Content.ReadFromJsonAsync<FeedbackDto>(); Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode); Assert.NotNull(feedback); Assert.Equal((byte)5, feedback.Rating); Assert.Contains(await patient.GetFromJsonAsync<List<FeedbackDto>>("/api/feedback") ?? [], item => item.FeedbackId == feedback.FeedbackId);
+            var cancellationSlot = slot.AddHours(1);
+            var cancellationCreateResponse = await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = cancellationSlot, Reason = "Cancellation test" });
+            var appointmentToCancel = await cancellationCreateResponse.Content.ReadFromJsonAsync<AppointmentDto>();
+            Assert.Equal(HttpStatusCode.Created, cancellationCreateResponse.StatusCode);
+            Assert.NotNull(appointmentToCancel);
+            var cancellationResponse = await patient.PutAsync($"/api/appointments/{appointmentToCancel.AppointmentId}/cancel", null);
+            var cancelled = await cancellationResponse.Content.ReadFromJsonAsync<AppointmentDto>();
+            Assert.Equal(HttpStatusCode.OK, cancellationResponse.StatusCode);
+            Assert.NotNull(cancelled);
+            Assert.Equal("Cancelled", cancelled.Status);
+            Assert.Contains(cancellationSlot, await patient.GetFromJsonAsync<List<DateTime>>($"/api/doctors/1/slots?date={DateOnly.FromDateTime(cancellationSlot):yyyy-MM-dd}") ?? []);
+            Assert.Equal(HttpStatusCode.Conflict, (await patient.PutAsync($"/api/appointments/{appointmentToCancel.AppointmentId}/cancel", null)).StatusCode);
             using var unrelatedDoctor = factory.CreateClient(); unrelatedDoctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(UserRoles.Doctor, DateTime.UtcNow.AddMinutes(10), 3)); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.GetAsync($"/api/patients/{profile.PatientId}/history")).StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
         }
         finally { await DeleteUserAsync(factory, email); }

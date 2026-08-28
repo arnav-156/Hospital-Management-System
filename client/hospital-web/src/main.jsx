@@ -84,11 +84,12 @@ function Auth({ onSignIn }) {
 function Page({ role, page, onNotice, onUnauthorized }) {
   const [state, setState] = useState({ loading: false, error: '', records: null });
   const [reloadVersion, setReloadVersion] = useState(0);
-  const routes = { ...(role === 'Patient' ? {} : { Profile: '/api/profile/me' }), Departments: role === 'Administrator' ? undefined : '/api/departments', Doctors: '/api/doctors', 'My appointments': '/api/appointments/my/summaries', Bills: '/api/bills/my', Notifications: '/api/notifications', 'Pending appointments': '/api/doctor/appointments/pending', Today: '/api/doctor/appointments/today', Patients: '/api/admin/patients', Staff: '/api/admin/staff' };
+  const routes = { ...(role === 'Patient' ? {} : { Profile: '/api/profile/me' }), Departments: role === 'Administrator' ? undefined : '/api/departments', Doctors: '/api/doctors', 'My appointments': role === 'Patient' ? undefined : '/api/appointments/my/summaries', Bills: '/api/bills/my', Notifications: '/api/notifications', 'Pending appointments': '/api/doctor/appointments/pending', Today: '/api/doctor/appointments/today', Patients: '/api/admin/patients', Staff: '/api/admin/staff' };
   useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null }); return; } let active = true; setState({ loading: true, error: '', records: null }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const data = await api(target); if (active) setState({ loading: false, error: '', records: Array.isArray(data) ? data : [data] }); } catch (error) { if (error.message.includes('401')) { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); onUnauthorized(false); } if (active) setState({ loading: false, error: error.message, records: null }); } }; load(); return () => { active = false; }; }, [page, onUnauthorized, reloadVersion]);
   if (page === 'Dashboard') return <LiveDashboard role={role} />;
   if (role === 'Patient' && page === 'Profile') return <PatientProfileForm onNotice={onNotice} />;
   if (page === 'Book appointment') return <BookingForm onNotice={onNotice} />;
+  if (role === 'Patient' && page === 'My appointments') return <PatientAppointments onNotice={onNotice} />;
   if (page === 'Notifications') return <NotificationList />;
   if (page === 'Feedback') return <FeedbackForm onNotice={onNotice} />;
   if (page === 'Pending appointments') return <DoctorAppointments onNotice={onNotice} onUnauthorized={onUnauthorized} />;
@@ -326,6 +327,14 @@ function BookingForm({ onNotice }) {
       <button className="primary" disabled={busy || loadingCatalog || !departments.length}>{busy ? 'Requesting…' : 'Request appointment'}</button>
     </form>
   </section>;
+}
+function PatientAppointments({ onNotice }) {
+  const [state, setState] = useState({ loading: true, error: '', records: [] }); const [cancellingId, setCancellingId] = useState(null);
+  const load = async () => { setState({ loading: true, error: '', records: [] }); try { setState({ loading: false, error: '', records: await api('/api/appointments/my/summaries?pageSize=100') }); } catch (error) { setState({ loading: false, error: error.message, records: [] }); } };
+  useEffect(() => { load(); }, []);
+  const cancel = async (appointmentId) => { setCancellingId(appointmentId); try { const updated = await api(`/api/appointments/${appointmentId}/cancel`, { method: 'PUT' }); setState((current) => ({ ...current, records: current.records.map((appointment) => appointment.appointmentId === updated.appointmentId ? { ...appointment, status: updated.status } : appointment) })); onNotice('Appointment cancelled. The time is available for another booking.'); } catch (error) { setState((current) => ({ ...current, error: error.message })); } finally { setCancellingId(null); } };
+  const now = new Date().toISOString();
+  return <section className="panel"><div className="panel-title"><h2>My appointments</h2><button className="secondary" onClick={load} disabled={state.loading || cancellingId !== null}>Refresh</button></div><p className="muted">You can cancel a future appointment while it is pending or accepted.</p>{state.loading && <p>Loading live appointments…</p>}{state.error && <p className="error">{state.error}</p>}{!state.loading && !state.error && state.records.length === 0 && <p className="muted">You do not have any appointments yet.</p>}{state.records.map((appointment) => { const canCancel = appointment.appointmentDateTime > now && ['Pending', 'Accepted'].includes(appointment.status); return <div className="table" key={appointment.appointmentId}><div><b>{appointment.doctorName} — {appointment.departmentName}</b><span>{appointment.appointmentDateTime?.slice(0, 16)} UTC</span><span>{appointment.reason || 'No reason provided'}</span></div><div><span className="pill">{appointment.status}</span>{canCancel && <button className="secondary" onClick={() => cancel(appointment.appointmentId)} disabled={cancellingId !== null}>{cancellingId === appointment.appointmentId ? 'Cancelling…' : 'Cancel appointment'}</button>}</div></div>; })}</section>;
 }
 function FeedbackForm({ onNotice }) {
   const [appointments, setAppointments] = useState([]); const [submittedFeedback, setSubmittedFeedback] = useState([]); const [appointmentId, setAppointmentId] = useState(''); const [rating, setRating] = useState('5'); const [comments, setComments] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);

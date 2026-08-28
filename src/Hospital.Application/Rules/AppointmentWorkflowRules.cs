@@ -10,4 +10,6 @@ public static class AppointmentWorkflowRules
     public static bool CanRecordTreatment(string? status) => status == "Accepted";
 
     public static bool CanGenerateBill(string? status) => status == "Completed";
+
+    public static bool CanCancel(string? status) => status is "Pending" or "Accepted";
 }

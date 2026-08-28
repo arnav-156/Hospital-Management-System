@@ -39,6 +39,21 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
         return await db.Appointments.AsNoTracking().Where(appointment => appointment.PatientId == patient.PatientId).OrderByDescending(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(appointment => new PatientAppointmentSummaryDto(appointment.AppointmentId, appointment.AppointmentDateTime, appointment.Status, appointment.Doctor.FirstName + " " + appointment.Doctor.LastName, appointment.Doctor.Department.Name, appointment.Reason, appointment.DoctorResponseNote)).ToListAsync(ct);
     }
     public async Task<AppointmentDto> GetPatientAppointmentAsync(int userId, int appointmentId, CancellationToken ct) { var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found."); return ToDto(await db.Appointments.AsNoTracking().SingleOrDefaultAsync(a => a.AppointmentId == appointmentId && a.PatientId == patient.PatientId, ct) ?? throw new NotFoundException("Appointment not found.")); }
+    public async Task<AppointmentDto> CancelAsync(int userId, int appointmentId, CancellationToken ct)
+    {
+        var patient = await db.Patients.SingleOrDefaultAsync(candidate => candidate.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found.");
+        var appointment = await db.Appointments.SingleOrDefaultAsync(candidate => candidate.AppointmentId == appointmentId && candidate.PatientId == patient.PatientId, ct) ?? throw new NotFoundException("Appointment not found.");
+        var now = clock.GetUtcNow().UtcDateTime;
+        if (!AppointmentWorkflowRules.CanCancel(appointment.Status) || appointment.AppointmentDateTime <= now) throw new ConflictException("Only future pending or accepted appointments can be cancelled.");
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        appointment.Status = "Cancelled";
+        appointment.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        var doctorUserId = await db.Doctors.Where(doctor => doctor.DoctorId == appointment.DoctorId).Select(doctor => doctor.UserId).SingleAsync(ct);
+        await notifications.CreateAsync(doctorUserId, "AppointmentCancelled", $"The appointment on {appointment.AppointmentDateTime:yyyy-MM-dd HH:mm} UTC was cancelled by the patient.", ct);
+        await transaction.CommitAsync(ct);
+        return ToDto(appointment);
+    }
     public async Task<IReadOnlyList<AppointmentDto>> GetDoctorAppointmentsAsync(int userId, bool today, PaginationRequest pagination, CancellationToken ct) { var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found."); var q = db.Appointments.AsNoTracking().Where(a => a.DoctorId == doctor.DoctorId); if (today) { var day = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).ToDateTime(TimeOnly.MinValue); q = q.Where(a => a.AppointmentDateTime >= day && a.AppointmentDateTime < day.AddDays(1)); } else q = q.Where(a => a.Status == "Pending"); return (await q.OrderBy(a => a.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList(); }
     public async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorWorkItemsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
     {
