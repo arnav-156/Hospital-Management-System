@@ -46,7 +46,7 @@ function App() {
     window.addEventListener('hospital:unauthorized', signOutExpiredSession);
     return () => window.removeEventListener('hospital:unauthorized', signOutExpiredSession);
   }, []);
-  if (!signedIn) return <Auth onSignIn={(user) => { setRole(user.role); setPage('Dashboard'); setSignedIn(true); }} />;
+  if (!signedIn) return <Auth onSignIn={(user, isNewPatient) => { setRole(user.role); setPage(isNewPatient && user.role === 'Patient' ? 'Profile' : 'Dashboard'); setSignedIn(true); }} />;
   return <div className="shell"><aside><div className="brand">Medi<span>Core</span></div><p className="role">{role} portal</p>{menu.map((item) => <button key={item} className={page === item ? 'nav active' : 'nav'} onClick={() => navigate(item)}>{item}</button>)}<button className="signout" onClick={() => { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); setSignedIn(false); }}>Sign out</button></aside><main className="content"><header><div><p className="eyebrow">Hospital management system</p><h1>{page}</h1></div><p className="role">{role}</p></header>{notice && <p className="notice">{notice}</p>}<Page role={role} page={page} onNotice={setNotice} onUnauthorized={setSignedIn} /></main></div>;
 }
 
@@ -71,7 +71,7 @@ function Auth({ onSignIn }) {
       if (!response.ok) throw new Error(data.detail ?? `${isRegistration ? 'Registration' : 'Sign-in'} failed.`);
       sessionStorage.setItem('accessToken', data.accessToken);
       sessionStorage.setItem('currentUser', JSON.stringify(data.user));
-      onSignIn(data.user);
+      onSignIn(data.user, isRegistration);
     } catch (reason) {
       setError(reason.message);
     } finally {
