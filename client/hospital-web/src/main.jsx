@@ -46,7 +46,7 @@ function App() {
     window.addEventListener('hospital:unauthorized', signOutExpiredSession);
     return () => window.removeEventListener('hospital:unauthorized', signOutExpiredSession);
   }, []);
-  if (!signedIn) return <Auth onSignIn={(user, isNewPatient) => { setRole(user.role); setPage(isNewPatient && user.role === 'Patient' ? 'Profile' : 'Dashboard'); setSignedIn(true); }} />;
+  if (!signedIn) return <Auth onSignIn={async (user, isNewPatient) => { setRole(user.role); if (isNewPatient && user.role === 'Patient') { setPage('Profile'); } else if (user.role === 'Patient') { try { await api('/api/profile/me'); setPage('Dashboard'); } catch (error) { setPage(error.message.includes('Patient profile not found') ? 'Profile' : 'Dashboard'); } } else { setPage('Dashboard'); } setSignedIn(true); }} />;
   return <div className="shell"><aside><div className="brand">Medi<span>Core</span></div><p className="role">{role} portal</p>{menu.map((item) => <button key={item} className={page === item ? 'nav active' : 'nav'} onClick={() => navigate(item)}>{item}</button>)}<button className="signout" onClick={() => { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); setSignedIn(false); }}>Sign out</button></aside><main className="content"><header><div><p className="eyebrow">Hospital management system</p><h1>{page}</h1></div><p className="role">{role}</p></header>{notice && <p className="notice">{notice}</p>}<Page role={role} page={page} onNotice={setNotice} onUnauthorized={setSignedIn} /></main></div>;
 }
 
