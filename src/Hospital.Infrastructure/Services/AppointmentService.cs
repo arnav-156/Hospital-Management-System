@@ -13,7 +13,7 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
 {
     public async Task<IReadOnlyList<DateTime>> GetAvailableSlotsAsync(int doctorId, DateOnly appointmentDate, CancellationToken ct)
     {
-        var doctorExists = await db.Doctors.AnyAsync(d => d.DoctorId == doctorId && d.IsActive && d.Department.IsActive, ct);
+        var doctorExists = await db.Doctors.AnyAsync(d => d.DoctorId == doctorId && d.IsActive && d.User.IsActive && d.Department.IsActive, ct);
         if (!doctorExists) throw new NotFoundException("Doctor not found.");
         var day = appointmentDate.ToDateTime(TimeOnly.MinValue); var booked = await db.Appointments.Where(a => a.DoctorId == doctorId && a.AppointmentDateTime >= day && a.AppointmentDateTime < day.AddDays(1) && a.Status != "Rejected" && a.Status != "Cancelled").Select(a => a.AppointmentDateTime).ToListAsync(ct);
         return Enumerable.Range(0, 16).Select(i => day.AddHours(9).AddMinutes(i * 30)).Where(slot => slot > clock.GetUtcNow().UtcDateTime && !booked.Contains(slot)).ToList();
@@ -23,7 +23,7 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
         var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new ConflictException("Complete your patient profile before requesting an appointment.");
         var slot = DateTime.SpecifyKind(request.AppointmentDateTime, DateTimeKind.Utc);
         if (!AppointmentWorkflowRules.IsBookableSlot(slot, clock.GetUtcNow().UtcDateTime)) throw new ConflictException("Choose a future half-hour slot between 09:00 and 17:00 UTC.");
-        var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.DoctorId == request.DoctorId && d.DepartmentId == request.DepartmentId && d.IsActive && d.Department.IsActive, ct) ?? throw new NotFoundException("Active doctor in the selected department not found.");
+        var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.DoctorId == request.DoctorId && d.DepartmentId == request.DepartmentId && d.IsActive && d.User.IsActive && d.Department.IsActive, ct) ?? throw new NotFoundException("Active doctor in the selected department not found.");
         var appointment = new Appointment { PatientId = patient.PatientId, DoctorId = doctor.DoctorId, DepartmentId = doctor.DepartmentId, AppointmentDateTime = slot, DurationMinutes = 30, Status = "Pending", Reason = request.Reason?.Trim(), CreatedAt = clock.GetUtcNow().UtcDateTime };
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.Appointments.Add(appointment);

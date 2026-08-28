@@ -322,11 +322,11 @@ public sealed class AuthenticationEndpointTests
     }
 
     [Fact]
-    public async Task InactiveDoctorIsNotAvailableForPatientSelection()
+    public async Task InactiveDoctorAccountIsNotAvailableForPatientSelection()
     {
         using var factory = new TestWebApplicationFactory();
         using var client = factory.CreateClient();
-        bool? originalIsActive = null;
+        bool? originalAccountIsActive = null;
 
         try
         {
@@ -334,8 +334,9 @@ public sealed class AuthenticationEndpointTests
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
                 var doctor = await dbContext.Doctors.SingleAsync(candidate => candidate.DoctorId == 1);
-                originalIsActive = doctor.IsActive;
-                doctor.IsActive = false;
+                var user = await dbContext.Users.SingleAsync(candidate => candidate.UserId == doctor.UserId);
+                originalAccountIsActive = user.IsActive;
+                user.IsActive = false;
                 await dbContext.SaveChangesAsync();
             }
 
@@ -346,12 +347,13 @@ public sealed class AuthenticationEndpointTests
         }
         finally
         {
-            if (originalIsActive.HasValue)
+            if (originalAccountIsActive.HasValue)
             {
                 await using var scope = factory.Services.CreateAsyncScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
                 var doctor = await dbContext.Doctors.SingleAsync(candidate => candidate.DoctorId == 1);
-                doctor.IsActive = originalIsActive.Value;
+                var user = await dbContext.Users.SingleAsync(candidate => candidate.UserId == doctor.UserId);
+                user.IsActive = originalAccountIsActive.Value;
                 await dbContext.SaveChangesAsync();
             }
         }

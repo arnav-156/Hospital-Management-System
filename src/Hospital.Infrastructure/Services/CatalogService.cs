@@ -36,13 +36,13 @@ public sealed class CatalogService(HospitalManagementDbContext dbContext, TimePr
 
     public async Task<IReadOnlyList<DoctorSummaryDto>> GetDoctorsAsync(int? departmentId, PaginationRequest pagination, CancellationToken cancellationToken)
     {
-        var query = dbContext.Doctors.AsNoTracking().Where(doctor => doctor.IsActive && doctor.Department.IsActive);
+        var query = dbContext.Doctors.AsNoTracking().Where(doctor => doctor.IsActive && doctor.User.IsActive && doctor.Department.IsActive);
         if (departmentId.HasValue) query = query.Where(doctor => doctor.DepartmentId == departmentId.Value);
         return await query.OrderBy(doctor => doctor.LastName).ThenBy(doctor => doctor.FirstName).Skip(pagination.Skip).Take(pagination.PageSize).Select(doctor => ToDto(doctor)).ToListAsync(cancellationToken);
     }
 
     public async Task<DoctorSummaryDto> GetDoctorAsync(int doctorId, CancellationToken cancellationToken) =>
-        await dbContext.Doctors.AsNoTracking().Where(doctor => doctor.DoctorId == doctorId && doctor.IsActive && doctor.Department.IsActive).Select(doctor => ToDto(doctor)).SingleOrDefaultAsync(cancellationToken) ?? throw new NotFoundException("Doctor not found.");
+        await dbContext.Doctors.AsNoTracking().Where(doctor => doctor.DoctorId == doctorId && doctor.IsActive && doctor.User.IsActive && doctor.Department.IsActive).Select(doctor => ToDto(doctor)).SingleOrDefaultAsync(cancellationToken) ?? throw new NotFoundException("Doctor not found.");
 
     private static DepartmentDto ToDto(Department department) => new(department.DepartmentId, department.DepartmentCode, department.Name, department.Description, department.IsActive);
     private static DoctorSummaryDto ToDto(Doctor doctor) => new(doctor.DoctorId, doctor.DepartmentId, doctor.FirstName, doctor.LastName, doctor.Specialization, doctor.PhoneNumber, doctor.ConsultationFee);
