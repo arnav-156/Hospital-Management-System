@@ -267,6 +267,7 @@ public sealed class AuthenticationEndpointTests
             Assert.NotNull(status);
             Assert.False(status.IsActive);
             Assert.Equal(HttpStatusCode.Unauthorized, blockedLogin.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await patientClient.GetAsync("/api/auth/me")).StatusCode);
         }
         finally
         {
@@ -390,7 +391,7 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(bill.BillId, (await patient.GetFromJsonAsync<BillDto>($"/api/bills/{bill.BillId}"))!.BillId);
             var notifications = await patient.GetFromJsonAsync<List<NotificationDto>>("/api/notifications"); Assert.NotNull(notifications); var notification = Assert.Single(notifications, item => item.NotificationType == "BillGenerated"); var read = await patient.PutAsync($"/api/notifications/{notification.NotificationId}/read", null); Assert.Equal(HttpStatusCode.OK, read.StatusCode);
             var feedbackResponse = await patient.PostAsJsonAsync("/api/feedback", new CreateFeedbackRequest { AppointmentId = created.AppointmentId, Rating = 5, Comments = "Excellent" }); var feedback = await feedbackResponse.Content.ReadFromJsonAsync<FeedbackDto>(); Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode); Assert.NotNull(feedback); Assert.Equal((byte)5, feedback.Rating); Assert.Contains(await patient.GetFromJsonAsync<List<FeedbackDto>>("/api/feedback") ?? [], item => item.FeedbackId == feedback.FeedbackId);
-            using var unrelatedDoctor = factory.CreateClient(); unrelatedDoctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(UserRoles.Doctor, DateTime.UtcNow.AddMinutes(10))); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.GetAsync($"/api/patients/{profile.PatientId}/history")).StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
+            using var unrelatedDoctor = factory.CreateClient(); unrelatedDoctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(UserRoles.Doctor, DateTime.UtcNow.AddMinutes(10), 3)); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.GetAsync($"/api/patients/{profile.PatientId}/history")).StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
         }
         finally { await DeleteUserAsync(factory, email); }
     }
@@ -521,7 +522,7 @@ public sealed class AuthenticationEndpointTests
 
     private static string NewTestEmail() => $"hospital.test.{Guid.NewGuid():N}@example.test";
 
-    private static string CreateToken(string role, DateTime expiresAt)
+    private static string CreateToken(string role, DateTime expiresAt, int? userId = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestWebApplicationFactory.SigningKey));
         var token = new JwtSecurityToken(
@@ -529,7 +530,7 @@ public sealed class AuthenticationEndpointTests
             TestWebApplicationFactory.Audience,
             new[]
             {
-                new Claim(ClaimTypes.NameIdentifier, "999999"),
+                new Claim(ClaimTypes.NameIdentifier, (userId ?? (role == UserRoles.Patient ? 4 : 2)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new Claim(ClaimTypes.Email, "token@example.test"),
                 new Claim(ClaimTypes.Role, role),
             },

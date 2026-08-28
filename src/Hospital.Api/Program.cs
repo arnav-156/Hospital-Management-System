@@ -1,10 +1,13 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
+using System.Security.Claims;
 using Hospital.Application.DTOs.Auth;
 using Hospital.Api.Middleware;
 using Hospital.Infrastructure;
+using Hospital.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,6 +61,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero,
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdText = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!int.TryParse(userIdText, out var userId) || !await context.HttpContext.RequestServices.GetRequiredService<HospitalManagementDbContext>().Users.AnyAsync(user => user.UserId == userId && user.IsActive, context.HttpContext.RequestAborted))
+                {
+                    context.Fail("The account is inactive or no longer exists.");
+                }
+            },
         };
     });
 builder.Services.AddAuthorization();
