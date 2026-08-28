@@ -19,6 +19,8 @@ public sealed class AppointmentsController(IAppointmentService appointments) : C
     public async Task<ActionResult<AppointmentDto>> Create(CreateAppointmentRequest request, CancellationToken ct) { var result = await appointments.CreateAsync(UserId, request, ct); return CreatedAtAction(nameof(GetById), new { appointmentId = result.AppointmentId }, result); }
     [Authorize(Roles = UserRoles.Patient), HttpGet("appointments/my")]
     public async Task<ActionResult<IReadOnlyList<AppointmentDto>>> Mine([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetPatientAppointmentsAsync(UserId, pagination, ct));
+    [Authorize(Roles = UserRoles.Patient), HttpGet("appointments/my/summaries")]
+    public async Task<ActionResult<IReadOnlyList<PatientAppointmentSummaryDto>>> Summaries([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetPatientAppointmentSummariesAsync(UserId, pagination, ct));
     [Authorize(Roles = UserRoles.Patient), HttpGet("appointments/{appointmentId:int}")]
     public async Task<ActionResult<AppointmentDto>> GetById(int appointmentId, CancellationToken ct) => Ok(await appointments.GetPatientAppointmentAsync(UserId, appointmentId, ct));
     [Authorize(Roles = UserRoles.Doctor), HttpGet("doctor/appointments/pending")]
