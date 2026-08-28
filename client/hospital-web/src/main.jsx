@@ -89,6 +89,7 @@ function Page({ role, page, onNotice, onUnauthorized }) {
   if (page === 'Dashboard') return <LiveDashboard role={role} />;
   if (role === 'Patient' && page === 'Profile') return <PatientProfileForm onNotice={onNotice} />;
   if (page === 'Book appointment') return <BookingForm onNotice={onNotice} />;
+  if (page === 'Notifications') return <NotificationList />;
   if (page === 'Feedback') return <FeedbackForm onNotice={onNotice} />;
   if (page === 'Pending appointments') return <DoctorAppointments onNotice={onNotice} onUnauthorized={onUnauthorized} />;
   if (page === 'Today') return <DoctorToday />;
@@ -137,6 +138,13 @@ function LiveDashboard({ role }) {
     load(); return () => { active = false; };
   }, [role]);
   return <>{state.loading && <section className="panel"><p>Loading live dashboard data…</p></section>}{state.error && <section className="panel"><p className="error">{state.error}</p></section>}{!state.loading && !state.error && <><section className="stats">{state.cards.map((card) => <Card key={card.label} {...card} />)}</section><section className="panel"><h2>Today at a glance</h2><p>These figures are calculated from the records currently available to your account.</p></section></>}</>;
+}
+function NotificationList() {
+  const [state, setState] = useState({ loading: true, error: '', records: [] });
+  const load = async () => { setState({ loading: true, error: '', records: [] }); try { setState({ loading: false, error: '', records: await api('/api/notifications?pageSize=100') }); } catch (error) { setState({ loading: false, error: error.message, records: [] }); } };
+  useEffect(() => { load(); }, []);
+  const markRead = async (notificationId) => { try { const updated = await api(`/api/notifications/${notificationId}/read`, { method: 'PUT' }); setState((current) => ({ ...current, records: current.records.map((notification) => notification.notificationId === notificationId ? updated : notification) })); } catch (error) { setState((current) => ({ ...current, error: error.message })); } };
+  return <section className="panel"><div className="panel-title"><h2>Notifications</h2><button className="secondary" onClick={load} disabled={state.loading}>Refresh</button></div>{state.loading && <p>Loading live data…</p>}{state.error && <p className="error">{state.error}</p>}{!state.loading && !state.error && state.records.length === 0 && <p className="muted">No notifications.</p>}{state.records.map((notification) => <div className="table" key={notification.notificationId}><div><b>{notification.notificationType}</b><span>{notification.message}</span><span>{notification.createdAt?.slice(0, 16)} UTC</span></div><div>{notification.isRead ? <span className="pill">Read</span> : <button className="secondary" onClick={() => markRead(notification.notificationId)}>Mark as read</button>}</div></div>)}</section>;
 }
 function useDoctorWorkItems() {
   const [state, setState] = useState({ loading: true, error: '', records: [] });
