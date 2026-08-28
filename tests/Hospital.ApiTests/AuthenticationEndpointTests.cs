@@ -394,6 +394,8 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal("Test Patient", workItem.PatientName);
             Assert.False(string.IsNullOrWhiteSpace(workItem.MedicalRecordNumber));
             Assert.False(workItem.HasBill);
+            Assert.Equal(HttpStatusCode.NotFound, (await doctor.GetAsync($"/api/patients/{profile.PatientId}/history")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await doctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
             var accepted = await doctor.PutAsJsonAsync($"/api/appointments/{created.AppointmentId}/accept", new AppointmentDecisionRequest { Note = "Confirmed" }); var decision = await accepted.Content.ReadFromJsonAsync<AppointmentDto>(); Assert.Equal(HttpStatusCode.OK, accepted.StatusCode); Assert.NotNull(decision); Assert.Equal("Accepted", decision.Status);
             Assert.Equal("Accepted", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{created.AppointmentId}"))!.Status);
             var treatmentResponse = await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Test diagnosis", Prescription = "Test prescription", ProgressNotes = "Stable" }); var treatment = await treatmentResponse.Content.ReadFromJsonAsync<TreatmentDto>(); Assert.Equal(HttpStatusCode.OK, treatmentResponse.StatusCode); Assert.NotNull(treatment);

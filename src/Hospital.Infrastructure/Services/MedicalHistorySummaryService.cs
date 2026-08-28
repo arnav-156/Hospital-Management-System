@@ -19,7 +19,7 @@ public sealed class MedicalHistorySummaryService(
     {
         var doctor = await dbContext.Doctors.SingleOrDefaultAsync(candidate => candidate.UserId == doctorUserId, cancellationToken)
             ?? throw new NotFoundException("Doctor profile not found.");
-        var authorized = await dbContext.Appointments.AnyAsync(appointment => appointment.PatientId == patientId && appointment.DoctorId == doctor.DoctorId, cancellationToken);
+        var authorized = await dbContext.Appointments.AnyAsync(appointment => appointment.PatientId == patientId && appointment.DoctorId == doctor.DoctorId && (appointment.Status == "Accepted" || appointment.Status == "Completed"), cancellationToken);
         if (!authorized) throw new NotFoundException("Patient history not found.");
 
         var history = (await dbContext.Treatments.AsNoTracking()
