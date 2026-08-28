@@ -86,7 +86,7 @@ function Page({ role, page, onNotice, onUnauthorized }) {
   const [reloadVersion, setReloadVersion] = useState(0);
   const routes = { ...(role === 'Patient' ? {} : { Profile: '/api/profile/me' }), Departments: '/api/departments', Doctors: '/api/doctors', 'My appointments': '/api/appointments/my/summaries', Bills: '/api/bills/my', Notifications: '/api/notifications', 'Pending appointments': '/api/doctor/appointments/pending', Today: '/api/doctor/appointments/today', Patients: '/api/admin/patients', Staff: '/api/admin/staff' };
   useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null }); return; } let active = true; setState({ loading: true, error: '', records: null }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const data = await api(target); if (active) setState({ loading: false, error: '', records: Array.isArray(data) ? data : [data] }); } catch (error) { if (error.message.includes('401')) { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); onUnauthorized(false); } if (active) setState({ loading: false, error: error.message, records: null }); } }; load(); return () => { active = false; }; }, [page, onUnauthorized, reloadVersion]);
-  if (page === 'Dashboard') return <><section className="stats"><Card label="Upcoming appointments" value={role === 'Patient' ? '2' : '8'} /><Card label={role === 'Administrator' ? 'Active staff' : 'Unread notifications'} value={role === 'Administrator' ? '42' : '3'} /><Card label="This month" value={role === 'Doctor' ? '31 patients' : '₹ 1,200'} /></section><section className="panel"><h2>Today at a glance</h2><p>Use the navigation to continue your workflow and view live records in each connected area.</p></section></>;
+  if (page === 'Dashboard') return <LiveDashboard role={role} />;
   if (role === 'Patient' && page === 'Profile') return <PatientProfileForm onNotice={onNotice} />;
   if (page === 'Book appointment') return <BookingForm onNotice={onNotice} />;
   if (page === 'Feedback') return <FeedbackForm onNotice={onNotice} />;
@@ -109,6 +109,34 @@ function PatientProfileForm({ onNotice }) {
   const submit = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { const profile = await api('/api/profile/me', { method: 'PUT', body: JSON.stringify(form) }); setForm((current) => ({ ...current, ...profile, dateOfBirth: profile.dateOfBirth ?? current.dateOfBirth })); onNotice('Profile saved successfully.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } };
   if (loading) return <section className="panel"><p>Loading profile…</p></section>;
   return <section className="panel"><h2>Patient profile</h2><form className="grid" onSubmit={submit}><label>First name<input value={form.firstName} onChange={update('firstName')} required maxLength="100" /></label><label>Last name<input value={form.lastName} onChange={update('lastName')} required maxLength="100" /></label><label>Date of birth<input type="date" value={form.dateOfBirth} onChange={update('dateOfBirth')} required /></label><label>Gender<select value={form.gender ?? ''} onChange={update('gender')}><option value="">Prefer not to say</option><option value="Female">Female</option><option value="Male">Male</option><option value="NonBinary">Non-binary</option><option value="Undisclosed">Undisclosed</option></select></label><label>Phone number<input value={form.phoneNumber ?? ''} onChange={update('phoneNumber')} maxLength="30" /></label><label>Emergency contact<input value={form.emergencyContactName ?? ''} onChange={update('emergencyContactName')} maxLength="200" /></label><label className="wide">Address<textarea value={form.address ?? ''} onChange={update('address')} maxLength="500" /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button></form></section>;
+}
+function LiveDashboard({ role }) {
+  const [state, setState] = useState({ loading: true, error: '', cards: [] });
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        if (role === 'Patient') {
+          const [appointments, notifications, bills] = await Promise.all([api('/api/appointments/my?pageSize=100'), api('/api/notifications?pageSize=100'), api('/api/bills/my?pageSize=100')]);
+          const now = new Date().toISOString();
+          const upcoming = appointments.filter((appointment) => appointment.appointmentDateTime > now && ['Pending', 'Accepted'].includes(appointment.status)).length;
+          const unread = notifications.filter((notification) => !notification.isRead).length;
+          const outstanding = bills.filter((bill) => bill.status === 'Pending').reduce((total, bill) => total + Number(bill.amount), 0);
+          if (active) setState({ loading: false, error: '', cards: [{ label: 'Upcoming appointments', value: String(upcoming) }, { label: 'Unread notifications', value: String(unread) }, { label: 'Outstanding bills', value: `₹ ${outstanding.toFixed(2)}` }] });
+        } else if (role === 'Doctor') {
+          const [workItems, notifications] = await Promise.all([api('/api/doctor/appointments/work-items?pageSize=100'), api('/api/notifications?pageSize=100')]);
+          const month = new Date().toISOString().slice(0, 7);
+          const patientsThisMonth = new Set(workItems.filter((item) => item.appointmentDateTime?.slice(0, 7) === month).map((item) => item.patientId)).size;
+          if (active) setState({ loading: false, error: '', cards: [{ label: 'Pending reviews', value: String(workItems.filter((item) => item.status === 'Pending').length) }, { label: 'Unread notifications', value: String(notifications.filter((notification) => !notification.isRead).length) }, { label: 'Patients this month', value: String(patientsThisMonth) }] });
+        } else {
+          const [staff, doctors, patients] = await Promise.all([api('/api/admin/staff?pageSize=100'), api('/api/admin/doctors?pageSize=100'), api('/api/admin/patients?pageSize=100')]);
+          if (active) setState({ loading: false, error: '', cards: [{ label: 'Staff accounts', value: String(staff.filter((member) => member.isAccountActive).length) }, { label: 'Active doctors', value: String(doctors.filter((doctor) => doctor.isActive).length) }, { label: 'Patient records', value: String(patients.length) }] });
+        }
+      } catch (error) { if (active) setState({ loading: false, error: error.message, cards: [] }); }
+    };
+    load(); return () => { active = false; };
+  }, [role]);
+  return <>{state.loading && <section className="panel"><p>Loading live dashboard data…</p></section>}{state.error && <section className="panel"><p className="error">{state.error}</p></section>}{!state.loading && !state.error && <><section className="stats">{state.cards.map((card) => <Card key={card.label} {...card} />)}</section><section className="panel"><h2>Today at a glance</h2><p>These figures are calculated from the records currently available to your account.</p></section></>}</>;
 }
 function useDoctorWorkItems() {
   const [state, setState] = useState({ loading: true, error: '', records: [] });
