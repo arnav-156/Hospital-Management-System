@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFeedbackService, FeedbackService>();
+        services.AddScoped<IDashboardService, DashboardService>();
         services.Configure<OpenAiOptions>(options =>
         {
             options.ApiKey = configuration["OpenAi:ApiKey"] ?? configuration["OPENAI_API_KEY"];

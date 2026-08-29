@@ -14,6 +14,7 @@ using Hospital.Application.DTOs.Billing;
 using Hospital.Application.DTOs.Notifications;
 using Hospital.Application.DTOs.Feedback;
 using Hospital.Application.DTOs.Profiles;
+using Hospital.Application.DTOs.Dashboard;
 using Hospital.Application.Security;
 using Hospital.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -84,6 +85,71 @@ public sealed class AuthenticationEndpointTests
         Assert.True(firstPage.Count <= 1);
         Assert.Equal(HttpStatusCode.BadRequest, oversizedPage.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, invalidPage.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatientDashboardCountsAllUnreadNotificationsBeyondListPageSize()
+    {
+        var email = NewTestEmail();
+        using var factory = new TestWebApplicationFactory();
+        using var patient = factory.CreateClient();
+
+        try
+        {
+            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "DashboardTestPassword!1" });
+            var authentication = await registration.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(authentication);
+            patient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authentication.AccessToken);
+            Assert.Equal(HttpStatusCode.OK, (await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Dashboard", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) })).StatusCode);
+
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                dbContext.Notifications.AddRange(Enumerable.Range(1, 101).Select(number => new Hospital.Infrastructure.Data.Entities.Notification
+                {
+                    UserId = authentication.User.UserId,
+                    NotificationType = "DashboardTest",
+                    Message = $"Unread dashboard notification {number}",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                }));
+                await dbContext.SaveChangesAsync();
+            }
+
+            var response = await patient.GetAsync("/api/dashboard");
+            var dashboard = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(dashboard);
+            Assert.Equal(101, dashboard.UnreadNotifications);
+            Assert.Equal(0, dashboard.UpcomingAppointments);
+            Assert.Equal(0m, dashboard.OutstandingBills);
+        }
+        finally
+        {
+            await DeleteUserAsync(factory, email);
+        }
+    }
+
+    [Theory]
+    [InlineData("dr.ada@hospital.example")]
+    [InlineData("admin@hospital.example")]
+    public async Task DashboardIsAvailableToEachAuthenticatedStaffRole(string email)
+    {
+        using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "DevelopmentOnly!123" });
+        var authentication = await loginResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        Assert.NotNull(authentication);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authentication.AccessToken);
+
+        var response = await client.GetAsync("/api/dashboard");
+        var dashboard = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(dashboard);
     }
 
     [Fact]

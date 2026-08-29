@@ -119,27 +119,18 @@ function LiveDashboard({ role }) {
     let active = true;
     const load = async () => {
       try {
-        if (role === 'Patient') {
-          const [appointments, notifications, bills] = await Promise.all([api('/api/appointments/my?pageSize=100'), api('/api/notifications?pageSize=100'), api('/api/bills/my?pageSize=100')]);
-          const now = new Date().toISOString();
-          const upcoming = appointments.filter((appointment) => appointment.appointmentDateTime > now && ['Pending', 'Accepted'].includes(appointment.status)).length;
-          const unread = notifications.filter((notification) => !notification.isRead).length;
-          const outstanding = bills.filter((bill) => bill.status === 'Pending').reduce((total, bill) => total + Number(bill.amount), 0);
-          if (active) setState({ loading: false, error: '', cards: [{ label: 'Upcoming appointments', value: String(upcoming) }, { label: 'Unread notifications', value: String(unread) }, { label: 'Outstanding bills', value: `₹ ${outstanding.toFixed(2)}` }] });
-        } else if (role === 'Doctor') {
-          const [workItems, notifications] = await Promise.all([api('/api/doctor/appointments/work-items?pageSize=100'), api('/api/notifications?pageSize=100')]);
-          const month = new Date().toISOString().slice(0, 7);
-          const patientsThisMonth = new Set(workItems.filter((item) => item.appointmentDateTime?.slice(0, 7) === month).map((item) => item.patientId)).size;
-          if (active) setState({ loading: false, error: '', cards: [{ label: 'Pending reviews', value: String(workItems.filter((item) => item.status === 'Pending').length) }, { label: 'Unread notifications', value: String(notifications.filter((notification) => !notification.isRead).length) }, { label: 'Patients this month', value: String(patientsThisMonth) }] });
-        } else {
-          const [staff, doctors, patients] = await Promise.all([api('/api/admin/staff?pageSize=100'), api('/api/admin/doctors?pageSize=100'), api('/api/admin/patients?pageSize=100')]);
-          if (active) setState({ loading: false, error: '', cards: [{ label: 'Staff accounts', value: String(staff.filter((member) => member.isAccountActive).length) }, { label: 'Active doctors', value: String(doctors.filter((doctor) => doctor.isActive).length) }, { label: 'Patient records', value: String(patients.length) }] });
-        }
+        const summary = await api('/api/dashboard');
+        const cards = role === 'Patient'
+          ? [{ label: 'Upcoming appointments', value: String(summary.upcomingAppointments) }, { label: 'Unread notifications', value: String(summary.unreadNotifications) }, { label: 'Outstanding bills', value: `₹ ${Number(summary.outstandingBills).toFixed(2)}` }]
+          : role === 'Doctor'
+            ? [{ label: 'Pending reviews', value: String(summary.pendingReviews) }, { label: 'Unread notifications', value: String(summary.unreadNotifications) }, { label: 'Patients this month', value: String(summary.patientsThisMonth) }]
+            : [{ label: 'Staff accounts', value: String(summary.activeStaffAccounts) }, { label: 'Active doctors', value: String(summary.activeDoctors) }, { label: 'Patient records', value: String(summary.patientRecords) }];
+        if (active) setState({ loading: false, error: '', cards });
       } catch (error) { if (active) setState({ loading: false, error: error.message, cards: [] }); }
     };
     load(); return () => { active = false; };
   }, [role]);
-  return <>{state.loading && <section className="panel"><p>Loading live dashboard data…</p></section>}{state.error && <section className="panel"><p className="error">{state.error}</p></section>}{!state.loading && !state.error && <><section className="stats">{state.cards.map((card) => <Card key={card.label} {...card} />)}</section><section className="panel"><h2>Today at a glance</h2><p>These figures are calculated from the records currently available to your account.</p></section></>}</>;
+  return <>{state.loading && <section className="panel"><p>Loading live dashboard data…</p></section>}{state.error && <section className="panel"><p className="error">{state.error}</p></section>}{!state.loading && !state.error && <><section className="stats">{state.cards.map((card) => <Card key={card.label} {...card} />)}</section><section className="panel"><h2>Today at a glance</h2><p>These figures are calculated from all records available to your account.</p></section></>}</>;
 }
 function NotificationList() {
   const [state, setState] = useState({ loading: true, error: '', records: [] });
