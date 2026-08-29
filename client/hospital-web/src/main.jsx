@@ -140,19 +140,21 @@ function NotificationList() {
   const markRead = async (notificationId) => { try { const updated = await api(`/api/notifications/${notificationId}/read`, { method: 'PUT' }); setState((current) => ({ ...current, records: current.records.map((notification) => notification.notificationId === notificationId ? updated : notification) })); } catch (error) { setState((current) => ({ ...current, error: error.message })); } };
   return <section className="panel"><div className="panel-title"><h2>Notifications</h2><button className="secondary" onClick={() => load(page)} disabled={state.loading}>Refresh</button></div>{state.loading && <p>Loading live data…</p>}{state.error && <p className="error">{state.error}</p>}{!state.loading && !state.error && state.records.length === 0 && <p className="muted">No notifications.</p>}{state.records.map((notification) => <div className="table" key={notification.notificationId}><div><b>{notification.notificationType}</b><span>{notification.message}</span><span>{notification.createdAt?.slice(0, 16)} UTC</span></div><div>{notification.isRead ? <span className="pill">Read</span> : <button className="secondary" onClick={() => markRead(notification.notificationId)}>Mark as read</button>}</div></div>)}{!state.loading && !state.error && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
 }
-function useDoctorWorkItems() {
-  const [state, setState] = useState({ loading: true, error: '', records: [] });
-  const load = async () => {
+function useDoctorWorkItems(pendingOnly = false) {
+  const pageSize = 25;
+  const [state, setState] = useState({ loading: true, error: '', records: [] }); const [page, setPage] = useState(1); const [hasNext, setHasNext] = useState(false);
+  const load = async (requestedPage = page) => {
     setState({ loading: true, error: '', records: [] });
     try {
-      const records = await api('/api/doctor/appointments/work-items?pageSize=100');
+      const records = await api(`/api/doctor/appointments/${pendingOnly ? 'pending-work-items' : 'work-items'}?page=${requestedPage}&pageSize=${pageSize}`);
+      setPage(requestedPage); setHasNext(records.length === pageSize);
       setState({ loading: false, error: '', records });
     } catch (error) {
       setState({ loading: false, error: error.message, records: [] });
     }
   };
-  useEffect(() => { load(); }, []);
-  return { ...state, load };
+  useEffect(() => { load(1); }, [pendingOnly]);
+  return { ...state, page, hasNext, load };
 }
 
 function workItemLabel(item) {
@@ -160,9 +162,8 @@ function workItemLabel(item) {
 }
 
 function DoctorAppointments({ onNotice, onUnauthorized }) {
-  const { loading, error, records, load } = useDoctorWorkItems();
+  const { loading, error, records, page, hasNext, load } = useDoctorWorkItems(true);
   const [decisionError, setDecisionError] = useState(''); const [notes, setNotes] = useState({});
-  const pending = records.filter((record) => record.status === 'Pending');
   const decide = async (appointmentId, decision) => {
     setDecisionError('');
     try {
@@ -174,7 +175,7 @@ function DoctorAppointments({ onNotice, onUnauthorized }) {
       setDecisionError(failure.message);
     }
   };
-  return <section className="panel"><div className="panel-title"><h2>Pending appointments</h2><button className="secondary" onClick={load}>Refresh</button></div>{loading && <p>Loading live data…</p>}{(error || decisionError) && <p className="error">{error || decisionError}</p>}{!loading && !error && pending.length === 0 && <p className="muted">No pending appointments.</p>}{pending.map((record) => <div className="table" key={record.appointmentId}><div><b>{record.patientName} · {record.medicalRecordNumber}</b><span>{record.departmentName} · {record.appointmentDateTime?.slice(0, 16)} UTC</span><span>{record.reason || 'No reason provided'}</span></div><div><label htmlFor={`decision-note-${record.appointmentId}`}>Message to patient (optional)<textarea id={`decision-note-${record.appointmentId}`} value={notes[record.appointmentId] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [record.appointmentId]: event.target.value }))} maxLength="1000" placeholder="Explain the decision or next steps." /></label><button className="secondary" onClick={() => decide(record.appointmentId, 'accept')}>Accept</button><button className="secondary" onClick={() => decide(record.appointmentId, 'reject')}>Reject</button></div></div>)}</section>;
+  return <section className="panel"><div className="panel-title"><h2>Pending appointments</h2><button className="secondary" onClick={() => load(page)}>Refresh</button></div>{loading && <p>Loading live data…</p>}{(error || decisionError) && <p className="error">{error || decisionError}</p>}{!loading && !error && records.length === 0 && <p className="muted">No pending appointments.</p>}{records.map((record) => <div className="table" key={record.appointmentId}><div><b>{record.patientName} · {record.medicalRecordNumber}</b><span>{record.departmentName} · {record.appointmentDateTime?.slice(0, 16)} UTC</span><span>{record.reason || 'No reason provided'}</span></div><div><label htmlFor={`decision-note-${record.appointmentId}`}>Message to patient (optional)<textarea id={`decision-note-${record.appointmentId}`} value={notes[record.appointmentId] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [record.appointmentId]: event.target.value }))} maxLength="1000" placeholder="Explain the decision or next steps." /></label><button className="secondary" onClick={() => decide(record.appointmentId, 'accept')}>Accept</button><button className="secondary" onClick={() => decide(record.appointmentId, 'reject')}>Reject</button></div></div>)}{!loading && !error && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
 }
 
 function DoctorToday() {

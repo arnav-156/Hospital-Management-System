@@ -57,10 +57,23 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
     public async Task<IReadOnlyList<AppointmentDto>> GetDoctorAppointmentsAsync(int userId, bool today, PaginationRequest pagination, CancellationToken ct) { var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found."); var q = db.Appointments.AsNoTracking().Where(a => a.DoctorId == doctor.DoctorId); if (today) { var day = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).ToDateTime(TimeOnly.MinValue); q = q.Where(a => a.AppointmentDateTime >= day && a.AppointmentDateTime < day.AddDays(1)); } else q = q.Where(a => a.Status == "Pending"); return (await q.OrderBy(a => a.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList(); }
     public async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorWorkItemsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
     {
+        return await GetDoctorWorkItemsAsync(userId, pagination, false, ct);
+    }
+    public async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorPendingWorkItemsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
+    {
+        return await GetDoctorWorkItemsAsync(userId, pagination, true, ct);
+    }
+    private async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorWorkItemsAsync(int userId, PaginationRequest pagination, bool pendingOnly, CancellationToken ct)
+    {
         var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found.");
-        return await db.Appointments.AsNoTracking()
-            .Where(appointment => appointment.DoctorId == doctor.DoctorId && appointment.Status != "Rejected" && appointment.Status != "Cancelled")
-            .OrderByDescending(appointment => appointment.AppointmentDateTime)
+        var appointments = db.Appointments.AsNoTracking().Where(appointment => appointment.DoctorId == doctor.DoctorId);
+        appointments = pendingOnly
+            ? appointments.Where(appointment => appointment.Status == "Pending")
+            : appointments.Where(appointment => appointment.Status != "Rejected" && appointment.Status != "Cancelled");
+        var orderedAppointments = pendingOnly
+            ? appointments.OrderBy(appointment => appointment.AppointmentDateTime)
+            : appointments.OrderByDescending(appointment => appointment.AppointmentDateTime);
+        return await orderedAppointments
             .Skip(pagination.Skip)
             .Take(pagination.PageSize)
             .Select(appointment => new DoctorAppointmentWorkItemDto(

@@ -180,6 +180,59 @@ public sealed class AuthenticationEndpointTests
         }
     }
 
+    [Fact]
+    public async Task DoctorPendingWorkItemsArePagedSeparatelyFromCompletedWork()
+    {
+        var email = NewTestEmail();
+        using var factory = new TestWebApplicationFactory();
+        using var patient = factory.CreateClient();
+        using var doctor = factory.CreateClient();
+
+        try
+        {
+            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "DoctorQueueTestPassword!1" });
+            var authentication = await registration.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(authentication);
+            patient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authentication.AccessToken);
+            var profileResponse = await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Queue", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) });
+            var profile = await profileResponse.Content.ReadFromJsonAsync<PatientProfileDto>();
+            Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
+            Assert.NotNull(profile);
+
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                dbContext.Appointments.AddRange(Enumerable.Range(1, 26).Select(number => new Hospital.Infrastructure.Data.Entities.Appointment
+                {
+                    PatientId = profile.PatientId,
+                    DoctorId = 1,
+                    DepartmentId = 1,
+                    AppointmentDateTime = new DateTime(2036, 1, 1, 10, 0, 0, DateTimeKind.Utc).AddDays(number),
+                    DurationMinutes = 30,
+                    Status = "Pending",
+                    Reason = $"Pending queue appointment {number}",
+                    CreatedAt = DateTime.UtcNow,
+                }));
+                await dbContext.SaveChangesAsync();
+            }
+
+            var doctorLogin = await doctor.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "dr.ada@hospital.example", Password = "DevelopmentOnly!123" });
+            var doctorAuthentication = await doctorLogin.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(doctorAuthentication);
+            doctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", doctorAuthentication.AccessToken);
+
+            var secondPage = await doctor.GetFromJsonAsync<List<DoctorAppointmentWorkItemDto>>("/api/doctor/appointments/pending-work-items?page=2&pageSize=25");
+
+            Assert.Single(secondPage ?? []);
+            Assert.Equal("Pending queue appointment 26", secondPage![0].Reason);
+            Assert.All(secondPage, item => Assert.Equal("Pending", item.Status));
+        }
+        finally
+        {
+            await DeleteUserAsync(factory, email);
+        }
+    }
+
     [Theory]
     [InlineData("dr.ada@hospital.example")]
     [InlineData("admin@hospital.example")]
