@@ -55,7 +55,7 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
     public async Task<IReadOnlyList<PatientProfileDto>> GetPatientsAsync(string? search, PaginationRequest pagination, CancellationToken cancellationToken)
     {
         var query = dbContext.Patients.AsNoTracking().Include(patient => patient.User).AsQueryable();
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(patient => patient.FirstName.Contains(search) || patient.LastName.Contains(search) || patient.MedicalRecordNumber.Contains(search) || patient.User.Email.Contains(search));
+        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(patient => patient.FirstName.Contains(search) || patient.LastName.Contains(search) || (patient.FirstName + " " + patient.LastName).Contains(search) || patient.MedicalRecordNumber.Contains(search) || patient.User.Email.Contains(search));
         var patients = await query.OrderBy(patient => patient.LastName).ThenBy(patient => patient.FirstName).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(cancellationToken);
         return patients.Select(ToDto).ToList();
     }
@@ -63,7 +63,7 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
     public async Task<IReadOnlyList<DoctorProfileDto>> GetDoctorsAsync(string? search, PaginationRequest pagination, CancellationToken cancellationToken)
     {
         var query = dbContext.Doctors.AsNoTracking().Include(doctor => doctor.User).Include(doctor => doctor.Department).AsQueryable();
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(doctor => doctor.FirstName.Contains(search) || doctor.LastName.Contains(search) || doctor.Specialization.Contains(search) || doctor.User.Email.Contains(search));
+        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(doctor => doctor.FirstName.Contains(search) || doctor.LastName.Contains(search) || (doctor.FirstName + " " + doctor.LastName).Contains(search) || doctor.Specialization.Contains(search) || doctor.User.Email.Contains(search));
         var doctors = await query.OrderBy(doctor => doctor.LastName).ThenBy(doctor => doctor.FirstName).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(cancellationToken);
         return doctors.Select(ToDto).ToList();
     }
@@ -71,7 +71,7 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
     public async Task<IReadOnlyList<StaffProfileDto>> GetStaffAsync(string? search, PaginationRequest pagination, CancellationToken cancellationToken)
     {
         var query = dbContext.Staff.AsNoTracking().Include(staff => staff.User).Include(staff => staff.Department).AsQueryable();
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(staff => staff.FirstName.Contains(search) || staff.LastName.Contains(search) || staff.EmployeeNumber.Contains(search) || staff.JobTitle.Contains(search) || staff.User.Email.Contains(search));
+        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(staff => staff.FirstName.Contains(search) || staff.LastName.Contains(search) || (staff.FirstName + " " + staff.LastName).Contains(search) || staff.EmployeeNumber.Contains(search) || staff.JobTitle.Contains(search) || staff.User.Email.Contains(search));
         var staff = await query.OrderBy(staff => staff.LastName).ThenBy(staff => staff.FirstName).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(cancellationToken);
         return staff.Select(ToDto).ToList();
     }
