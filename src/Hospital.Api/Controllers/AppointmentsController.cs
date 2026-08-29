@@ -21,6 +21,8 @@ public sealed class AppointmentsController(IAppointmentService appointments) : C
     public async Task<ActionResult<IReadOnlyList<AppointmentDto>>> Mine([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetPatientAppointmentsAsync(UserId, pagination, ct));
     [Authorize(Roles = UserRoles.Patient), HttpGet("appointments/my/summaries")]
     public async Task<ActionResult<IReadOnlyList<PatientAppointmentSummaryDto>>> Summaries([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetPatientAppointmentSummariesAsync(UserId, pagination, ct));
+    [Authorize(Roles = UserRoles.Patient), HttpGet("appointments/my/feedback-eligible")]
+    public async Task<ActionResult<IReadOnlyList<AppointmentDto>>> FeedbackEligible([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetPatientFeedbackEligibleAppointmentsAsync(UserId, pagination, ct));
     [Authorize(Roles = UserRoles.Patient), HttpGet("appointments/{appointmentId:int}")]
     public async Task<ActionResult<AppointmentDto>> GetById(int appointmentId, CancellationToken ct) => Ok(await appointments.GetPatientAppointmentAsync(UserId, appointmentId, ct));
     [Authorize(Roles = UserRoles.Patient), HttpPut("appointments/{appointmentId:int}/cancel")]

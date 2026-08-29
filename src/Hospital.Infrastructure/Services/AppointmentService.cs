@@ -38,6 +38,11 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
         var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found.");
         return await db.Appointments.AsNoTracking().Where(appointment => appointment.PatientId == patient.PatientId).OrderByDescending(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(appointment => new PatientAppointmentSummaryDto(appointment.AppointmentId, appointment.AppointmentDateTime, appointment.Status, appointment.Doctor.FirstName + " " + appointment.Doctor.LastName, appointment.Doctor.Department.Name, appointment.Reason, appointment.DoctorResponseNote)).ToListAsync(ct);
     }
+    public async Task<IReadOnlyList<AppointmentDto>> GetPatientFeedbackEligibleAppointmentsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
+    {
+        var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found.");
+        return (await db.Appointments.AsNoTracking().Where(appointment => appointment.PatientId == patient.PatientId && appointment.Status == "Completed" && appointment.Feedbacks.Count == 0).OrderByDescending(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList();
+    }
     public async Task<AppointmentDto> GetPatientAppointmentAsync(int userId, int appointmentId, CancellationToken ct) { var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found."); return ToDto(await db.Appointments.AsNoTracking().SingleOrDefaultAsync(a => a.AppointmentId == appointmentId && a.PatientId == patient.PatientId, ct) ?? throw new NotFoundException("Appointment not found.")); }
     public async Task<AppointmentDto> CancelAsync(int userId, int appointmentId, CancellationToken ct)
     {
