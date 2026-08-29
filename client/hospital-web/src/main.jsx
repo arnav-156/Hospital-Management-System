@@ -140,15 +140,14 @@ function NotificationList() {
   const markRead = async (notificationId) => { try { const updated = await api(`/api/notifications/${notificationId}/read`, { method: 'PUT' }); setState((current) => ({ ...current, records: current.records.map((notification) => notification.notificationId === notificationId ? updated : notification) })); } catch (error) { setState((current) => ({ ...current, error: error.message })); } };
   return <section className="panel"><div className="panel-title"><h2>Notifications</h2><button className="secondary" onClick={() => load(page)} disabled={state.loading}>Refresh</button></div>{state.loading && <p>Loading live data…</p>}{state.error && <p className="error">{state.error}</p>}{!state.loading && !state.error && state.records.length === 0 && <p className="muted">No notifications.</p>}{state.records.map((notification) => <div className="table" key={notification.notificationId}><div><b>{notification.notificationType}</b><span>{notification.message}</span><span>{notification.createdAt?.slice(0, 16)} UTC</span></div><div>{notification.isRead ? <span className="pill">Read</span> : <button className="secondary" onClick={() => markRead(notification.notificationId)}>Mark as read</button>}</div></div>)}{!state.loading && !state.error && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
 }
-function useDoctorWorkItems(scope = 'all') {
-  const pageSize = 25;
+function useDoctorWorkItems(scope = 'all', itemsPerPage = 25) {
   const [state, setState] = useState({ loading: true, error: '', records: [] }); const [page, setPage] = useState(1); const [hasNext, setHasNext] = useState(false);
   const load = async (requestedPage = page) => {
     setState({ loading: true, error: '', records: [] });
     try {
       const route = scope === 'pending' ? 'pending-work-items' : scope === 'today' ? 'today-work-items' : 'work-items';
-      const records = await api(`/api/doctor/appointments/${route}?page=${requestedPage}&pageSize=${pageSize}`);
-      setPage(requestedPage); setHasNext(records.length === pageSize);
+      const records = await api(`/api/doctor/appointments/${route}?page=${requestedPage}&pageSize=${itemsPerPage}`);
+      setPage(requestedPage); setHasNext(records.length === itemsPerPage);
       setState({ loading: false, error: '', records });
     } catch (error) {
       setState({ loading: false, error: error.message, records: [] });
@@ -185,7 +184,7 @@ function DoctorToday() {
 }
 
 function DoctorHistoryForm({ onNotice }) {
-  const { loading, error: loadError, records } = useDoctorWorkItems();
+  const { loading, error: loadError, records } = useDoctorWorkItems('all', 100);
   const [patientId, setPatientId] = useState(''); const [result, setResult] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const patients = [...new Map(records.filter((record) => ['Accepted', 'Completed'].includes(record.status)).map((record) => [record.patientId, record])).values()];
   const submit = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { const summary = await api(`/api/patients/${Number(patientId)}/history-summary`, { method: 'POST' }); setResult(summary); onNotice(summary.aiAvailable ? 'AI summary generated for doctor review.' : 'AI is unavailable; normal history remains available.'); } catch (failure) { setError(failure.message); setResult(null); } finally { setBusy(false); } };
@@ -344,7 +343,7 @@ function FeedbackForm({ onNotice }) {
   return <section className="panel"><h2>Share feedback</h2><p className="muted">You can provide feedback only once for each completed appointment.</p><form className="grid" onSubmit={submit}><label className="wide" htmlFor="feedback-appointment">Completed appointment<select id="feedback-appointment" value={appointmentId} onChange={(event) => setAppointmentId(event.target.value)} disabled={loading || !eligibleAppointments.length} required><option value="">{loading ? 'Loading completed appointments…' : eligibleAppointments.length ? 'Choose a completed appointment' : 'No completed appointments need feedback'}</option>{eligibleAppointments.map((appointment) => <option key={appointment.appointmentId} value={appointment.appointmentId}>{appointment.appointmentDateTime?.slice(0, 16)} UTC{appointment.reason ? ` — ${appointment.reason}` : ''}</option>)}</select></label><label>Rating<select value={rating} onChange={(event) => setRating(event.target.value)}>{[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label className="wide">Comments<textarea value={comments} onChange={(event) => setComments(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy || loading || !eligibleAppointments.length}>{busy ? 'Submitting…' : 'Submit feedback'}</button></form></section>;
 }
 function TreatmentForm({ onNotice }) {
-  const { loading, error: loadError, records, load } = useDoctorWorkItems();
+  const { loading, error: loadError, records, load } = useDoctorWorkItems('all', 100);
   const [appointmentId, setAppointmentId] = useState(''); const [diagnosis, setDiagnosis] = useState(''); const [prescription, setPrescription] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const acceptedAppointments = records.filter((record) => record.status === 'Accepted');
   const submit = async (event) => { event.preventDefault(); setBusy(true); try { setError(''); await api(`/api/appointments/${appointmentId}/treatment`, { method: 'POST', body: JSON.stringify({ diagnosis, prescription }) }); setAppointmentId(''); setDiagnosis(''); setPrescription(''); await load(); onNotice('Treatment recorded. The appointment is ready for billing.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } };
@@ -352,7 +351,7 @@ function TreatmentForm({ onNotice }) {
 }
 
 function BillingForm({ onNotice }) {
-  const { loading, error: loadError, records, load } = useDoctorWorkItems();
+  const { loading, error: loadError, records, load } = useDoctorWorkItems('all', 100);
   const [appointmentId, setAppointmentId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState(''); const [dueDate, setDueDate] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const completedAppointments = records.filter((record) => record.status === 'Completed' && !record.hasBill);
   const submit = async (event) => { event.preventDefault(); setBusy(true); try { setError(''); await api(`/api/appointments/${appointmentId}/bill`, { method: 'POST', body: JSON.stringify({ amount: Number(amount), description, dueDate: dueDate || null }) }); setAppointmentId(''); setAmount(''); setDescription(''); setDueDate(''); await load(); onNotice('Bill generated.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } };
