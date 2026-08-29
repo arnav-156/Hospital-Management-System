@@ -205,31 +205,36 @@ function BookingForm({ onNotice }) {
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [departmentPage, setDepartmentPage] = useState(1);
+  const [doctorPage, setDoctorPage] = useState(1);
+  const [hasNextDepartmentPage, setHasNextDepartmentPage] = useState(false);
+  const [hasNextDoctorPage, setHasNextDoctorPage] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
-    api('/api/departments?pageSize=100')
-      .then((records) => { if (active) setDepartments(records); })
+    api(`/api/departments?page=${departmentPage}&pageSize=25`)
+      .then((records) => { if (active) { setDepartments(records); setHasNextDepartmentPage(records.length === 25); } })
       .catch((failure) => { if (active) setError(failure.message); })
       .finally(() => { if (active) setLoadingCatalog(false); });
     return () => { active = false; };
-  }, []);
+  }, [departmentPage]);
 
   useEffect(() => {
     if (!departmentId) {
       setDoctors([]);
+      setHasNextDoctorPage(false);
       return undefined;
     }
     let active = true;
     setLoadingDoctors(true);
-    api(`/api/departments/${departmentId}/doctors?pageSize=100`)
-      .then((records) => { if (active) setDoctors(records); })
+    api(`/api/departments/${departmentId}/doctors?page=${doctorPage}&pageSize=25`)
+      .then((records) => { if (active) { setDoctors(records); setHasNextDoctorPage(records.length === 25); } })
       .catch((failure) => { if (active) setError(failure.message); })
       .finally(() => { if (active) setLoadingDoctors(false); });
     return () => { active = false; };
-  }, [departmentId]);
+  }, [departmentId, doctorPage]);
 
   useEffect(() => {
     if (!doctorId || !appointmentDate) {
@@ -247,6 +252,7 @@ function BookingForm({ onNotice }) {
 
   const chooseDepartment = (event) => {
     setDepartmentId(event.target.value);
+    setDoctorPage(1);
     setDoctorId('');
     setAppointmentDate('');
     setAppointmentDateTime('');
@@ -299,12 +305,14 @@ function BookingForm({ onNotice }) {
           {departments.map((department) => <option key={department.departmentId} value={department.departmentId}>{department.name}{department.description ? ` — ${department.description}` : ''}</option>)}
         </select>
       </label>
+      <PaginationControls page={departmentPage} hasNext={hasNextDepartmentPage} onPrevious={() => setDepartmentPage((current) => current - 1)} onNext={() => setDepartmentPage((current) => current + 1)} />
       <label htmlFor="booking-doctor">Doctor
         <select id="booking-doctor" value={doctorId} onChange={chooseDoctor} disabled={!departmentId || loadingDoctors} required>
           <option value="">{loadingDoctors ? 'Loading doctors…' : departmentId ? 'Choose a doctor' : 'Choose a department first'}</option>
           {doctors.map((doctor) => <option key={doctor.doctorId} value={doctor.doctorId}>Dr. {doctor.firstName} {doctor.lastName} — {doctor.specialization} · ₹{doctor.consultationFee}</option>)}
         </select>
       </label>
+      {departmentId && <PaginationControls page={doctorPage} hasNext={hasNextDoctorPage} onPrevious={() => setDoctorPage((current) => current - 1)} onNext={() => setDoctorPage((current) => current + 1)} />}
       <label htmlFor="booking-date">Appointment date
         <input id="booking-date" type="date" value={appointmentDate} onChange={chooseDate} onInput={chooseDate} min={minimumDate} disabled={!doctorId} required />
       </label>
