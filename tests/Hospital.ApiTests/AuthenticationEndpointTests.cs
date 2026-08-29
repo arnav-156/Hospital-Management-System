@@ -134,6 +134,52 @@ public sealed class AuthenticationEndpointTests
         }
     }
 
+    [Fact]
+    public async Task PatientAppointmentSummariesRemainReachableAfterTheFirstPage()
+    {
+        var email = NewTestEmail();
+        using var factory = new TestWebApplicationFactory();
+        using var patient = factory.CreateClient();
+
+        try
+        {
+            var registration = await patient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "AppointmentPageTest!1" });
+            var authentication = await registration.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(authentication);
+            patient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authentication.AccessToken);
+            var profileResponse = await patient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Paged", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) });
+            var profile = await profileResponse.Content.ReadFromJsonAsync<PatientProfileDto>();
+            Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
+            Assert.NotNull(profile);
+
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                dbContext.Appointments.AddRange(Enumerable.Range(1, 26).Select(number => new Hospital.Infrastructure.Data.Entities.Appointment
+                {
+                    PatientId = profile.PatientId,
+                    DoctorId = 1,
+                    DepartmentId = 1,
+                    AppointmentDateTime = new DateTime(2035, 1, 1, 10, 0, 0, DateTimeKind.Utc).AddDays(number),
+                    DurationMinutes = 30,
+                    Status = "Pending",
+                    Reason = $"Paged appointment {number}",
+                    CreatedAt = DateTime.UtcNow,
+                }));
+                await dbContext.SaveChangesAsync();
+            }
+
+            var secondPage = await patient.GetFromJsonAsync<List<PatientAppointmentSummaryDto>>("/api/appointments/my/summaries?page=2&pageSize=25");
+
+            Assert.Single(secondPage ?? []);
+            Assert.Equal("Paged appointment 1", secondPage![0].Reason);
+        }
+        finally
+        {
+            await DeleteUserAsync(factory, email);
+        }
+    }
+
     [Theory]
     [InlineData("dr.ada@hospital.example")]
     [InlineData("admin@hospital.example")]
