@@ -124,6 +124,9 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(101, dashboard.UnreadNotifications);
             Assert.Equal(0, dashboard.UpcomingAppointments);
             Assert.Equal(0m, dashboard.OutstandingBills);
+
+            var finalNotificationPage = await patient.GetFromJsonAsync<List<NotificationDto>>("/api/notifications?page=5&pageSize=25");
+            Assert.Single(finalNotificationPage ?? []);
         }
         finally
         {
