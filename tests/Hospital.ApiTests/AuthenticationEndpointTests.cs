@@ -484,10 +484,13 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Billing validation diagnosis", TreatmentNotes = "Complete appointment for billing validation" })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await patient.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m })).StatusCode);
 
-            var billResponse = await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m, Description = "Authorization test bill" });
+            Assert.Equal(HttpStatusCode.Conflict, (await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m, DueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1) })).StatusCode);
+            var billDueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(14);
+            var billResponse = await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m, Description = "Authorization test bill", DueDate = billDueDate });
             var bill = await billResponse.Content.ReadFromJsonAsync<BillDto>();
             Assert.Equal(HttpStatusCode.OK, billResponse.StatusCode);
             Assert.NotNull(bill);
+            Assert.Equal(billDueDate, bill.DueDate);
             Assert.Equal(HttpStatusCode.NotFound, (await otherPatient.GetAsync($"/api/bills/{bill.BillId}")).StatusCode);
         }
         finally
