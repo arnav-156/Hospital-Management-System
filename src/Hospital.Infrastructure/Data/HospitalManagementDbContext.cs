@@ -18,6 +18,8 @@ public partial class HospitalManagementDbContext : DbContext
 
     public virtual DbSet<Bill> Bills { get; set; }
 
+    public virtual DbSet<BillPayment> BillPayments { get; set; }
+
     public virtual DbSet<Department> Departments { get; set; }
 
     public virtual DbSet<Doctor> Doctors { get; set; }
@@ -105,14 +107,41 @@ public partial class HospitalManagementDbContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasDefaultValue("Pending");
+            entity.Property(e => e.VoidedAt).HasPrecision(0);
+            entity.Property(e => e.VoidReason).HasMaxLength(500);
 
             entity.HasOne(d => d.GeneratedByDoctor).WithMany(p => p.Bills).HasForeignKey(d => d.GeneratedByDoctorId);
+
+            entity.HasOne(d => d.VoidedByDoctor).WithMany().HasForeignKey(d => d.VoidedByDoctorId)
+                .HasConstraintName("FK_Bills_Doctors_VoidedByDoctorId");
 
             entity.HasOne(d => d.Appointment).WithMany(p => p.Bills)
                 .HasPrincipalKey(p => new { p.AppointmentId, p.PatientId })
                 .HasForeignKey(d => new { d.AppointmentId, d.PatientId })
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Bills_Appointments_AppointmentPatient");
+        });
+
+        modelBuilder.Entity<BillPayment>(entity =>
+        {
+            entity.HasKey(e => e.PaymentId).HasName("PK_BillPayments");
+
+            entity.HasIndex(e => e.BillId, "UQ_BillPayments_BillId").IsUnique();
+
+            entity.HasIndex(e => new { e.BillId, e.RecordedAt }, "IX_BillPayments_BillId_RecordedAt").IsDescending(false, true);
+
+            entity.Property(e => e.Amount).HasColumnType("decimal(12, 2)");
+            entity.Property(e => e.PaymentMethod).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.RecordedAt).HasPrecision(0).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
+
+            entity.HasOne(d => d.Bill).WithMany(p => p.BillPayments).HasForeignKey(d => d.BillId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BillPayments_Bills_BillId");
+
+            entity.HasOne(d => d.RecordedByPatient).WithMany().HasForeignKey(d => d.RecordedByPatientId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BillPayments_Patients_RecordedByPatientId");
         });
 
         modelBuilder.Entity<Department>(entity =>

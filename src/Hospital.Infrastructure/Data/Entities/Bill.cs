@@ -25,7 +25,17 @@ public partial class Bill
 
     public DateTime? PaidAt { get; set; }
 
+    public DateTime? VoidedAt { get; set; }
+
+    public int? VoidedByDoctorId { get; set; }
+
+    public string? VoidReason { get; set; }
+
     public virtual Appointment Appointment { get; set; } = null!;
 
     public virtual Doctor? GeneratedByDoctor { get; set; }
+
+    public virtual Doctor? VoidedByDoctor { get; set; }
+
+    public virtual ICollection<BillPayment> BillPayments { get; set; } = new List<BillPayment>();
 }

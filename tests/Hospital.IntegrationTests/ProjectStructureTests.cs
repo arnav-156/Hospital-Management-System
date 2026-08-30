@@ -117,7 +117,20 @@ public sealed class DatabaseFirstCrudTests
         context.AddRange(treatment, bill, notification, feedback);
         await context.SaveChangesAsync();
 
-        Assert.Equal(12, await CountCreatedEntitiesAsync(context, patientUser, doctorUser, staffUser, department, patient, doctor, staff, appointment, treatment, bill, notification, feedback));
+        bill.Status = "Paid";
+        bill.PaidAt = DateTime.UtcNow;
+        var payment = new BillPayment
+        {
+            BillId = bill.BillId,
+            RecordedByPatientId = patient.PatientId,
+            Amount = bill.Amount,
+            PaymentMethod = "UPI",
+            ReferenceNumber = "integration-payment",
+        };
+        context.BillPayments.Add(payment);
+        await context.SaveChangesAsync();
+
+        Assert.Equal(13, await CountCreatedEntitiesAsync(context, patientUser, doctorUser, staffUser, department, patient, doctor, staff, appointment, treatment, bill, payment, notification, feedback));
 
         department.Description = "Updated department";
         patient.Address = "Updated address";
@@ -134,12 +147,13 @@ public sealed class DatabaseFirstCrudTests
         Assert.Equal("Accepted", await context.Appointments.Where(item => item.AppointmentId == appointment.AppointmentId).Select(item => item.Status).SingleAsync());
         Assert.Equal("Updated progress", await context.Treatments.Where(item => item.TreatmentId == treatment.TreatmentId).Select(item => item.ProgressNotes).SingleAsync());
         Assert.Equal("Updated bill", await context.Bills.Where(item => item.BillId == bill.BillId).Select(item => item.Description).SingleAsync());
+        Assert.Equal("UPI", await context.BillPayments.Where(item => item.PaymentId == payment.PaymentId).Select(item => item.PaymentMethod).SingleAsync());
         Assert.True(await context.Notifications.Where(item => item.NotificationId == notification.NotificationId).Select(item => item.IsRead).SingleAsync());
 
-        context.RemoveRange(feedback, notification, bill, treatment, appointment, staff, patient, doctor, patientUser, doctorUser, staffUser, department);
+        context.RemoveRange(payment, feedback, notification, bill, treatment, appointment, staff, patient, doctor, patientUser, doctorUser, staffUser, department);
         await context.SaveChangesAsync();
 
-        Assert.Equal(0, await CountCreatedEntitiesAsync(context, patientUser, doctorUser, staffUser, department, patient, doctor, staff, appointment, treatment, bill, notification, feedback));
+        Assert.Equal(0, await CountCreatedEntitiesAsync(context, patientUser, doctorUser, staffUser, department, patient, doctor, staff, appointment, treatment, bill, payment, notification, feedback));
     }
 
     private static User CreateUser(string email, string role) => new()
@@ -192,6 +206,7 @@ public sealed class DatabaseFirstCrudTests
         Appointment appointment,
         Treatment treatment,
         Bill bill,
+        BillPayment payment,
         Notification notification,
         Feedback feedback)
     {
@@ -205,6 +220,7 @@ public sealed class DatabaseFirstCrudTests
             await context.Appointments.CountAsync(item => item.AppointmentId == appointment.AppointmentId),
             await context.Treatments.CountAsync(item => item.TreatmentId == treatment.TreatmentId),
             await context.Bills.CountAsync(item => item.BillId == bill.BillId),
+            await context.BillPayments.CountAsync(item => item.PaymentId == payment.PaymentId),
             await context.Notifications.CountAsync(item => item.NotificationId == notification.NotificationId),
             await context.Feedbacks.CountAsync(item => item.FeedbackId == feedback.FeedbackId),
         };

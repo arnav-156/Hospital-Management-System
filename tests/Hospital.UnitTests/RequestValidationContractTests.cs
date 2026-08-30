@@ -37,6 +37,27 @@ public sealed class RequestValidationContractTests
     }
 
     [Theory]
+    [InlineData("UPI", true)]
+    [InlineData("Cash", true)]
+    [InlineData("WireTransfer", false)]
+    public void PaymentRequestRestrictsMethodsToTheSupportedLedgerValues(string paymentMethod, bool expected)
+    {
+        var results = Validate(new RecordPaymentRequest { PaymentMethod = paymentMethod });
+
+        Assert.Equal(expected, results.Count == 0);
+    }
+
+    [Theory]
+    [InlineData("Duplicate charge", true)]
+    [InlineData("", false)]
+    public void VoidBillRequestRequiresAnExplanation(string reason, bool expected)
+    {
+        var results = Validate(new VoidBillRequest { Reason = reason });
+
+        Assert.Equal(expected, results.Count == 0);
+    }
+
+    [Theory]
     [InlineData((byte)0)]
     [InlineData((byte)6)]
     public void FeedbackRequestRestrictsRatingToOneThroughFive(byte rating)

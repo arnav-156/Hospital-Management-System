@@ -19,5 +19,21 @@ public sealed class BillsController(IBillingService billing) : ControllerBase
     public async Task<ActionResult<BillDto>> Get(int billId, CancellationToken ct) => Ok(await billing.GetAsync(UserId, billId, ct));
     [Authorize(Roles = UserRoles.Patient), HttpGet("bills/my")]
     public async Task<ActionResult<IReadOnlyList<BillDto>>> Mine([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await billing.GetMineAsync(UserId, pagination, ct));
+
+    [Authorize(Roles = UserRoles.Patient), HttpPost("bills/{billId:int}/payments")]
+    public async Task<ActionResult<BillDto>> RecordPayment(int billId, RecordPaymentRequest request, CancellationToken ct) => Ok(await billing.RecordPaymentAsync(UserId, billId, request, ct));
+
+    [Authorize(Roles = UserRoles.Patient), HttpGet("bills/{billId:int}/payments")]
+    public async Task<ActionResult<IReadOnlyList<PaymentDto>>> PaymentHistory(int billId, CancellationToken ct) => Ok(await billing.GetPaymentHistoryAsync(UserId, billId, ct));
+
+    [Authorize(Roles = UserRoles.Doctor), HttpGet("doctor/bills")]
+    public async Task<ActionResult<IReadOnlyList<BillDto>>> DoctorBills([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await billing.GetDoctorBillsAsync(UserId, pagination, ct));
+
+    [Authorize(Roles = UserRoles.Doctor), HttpGet("doctor/bills/{billId:int}/payments")]
+    public async Task<ActionResult<IReadOnlyList<PaymentDto>>> DoctorPaymentHistory(int billId, CancellationToken ct) => Ok(await billing.GetDoctorPaymentHistoryAsync(UserId, billId, ct));
+
+    [Authorize(Roles = UserRoles.Doctor), HttpPut("bills/{billId:int}/void")]
+    public async Task<ActionResult<BillDto>> Void(int billId, VoidBillRequest request, CancellationToken ct) => Ok(await billing.VoidAsync(UserId, billId, request, ct));
+
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, System.Globalization.CultureInfo.InvariantCulture);
 }

@@ -12,5 +12,6 @@
 :r database\migrations\009_CreateNotifications.sql
 :r database\migrations\010_CreateFeedback.sql
 :r database\migrations\011_CreateAiSummaryAudits.sql
+:r database\migrations\012_AddBillPayments.sql
 :r database\seed\001_DevelopmentSeedData.sql
 :r database\scripts\ValidateDatabase.sql

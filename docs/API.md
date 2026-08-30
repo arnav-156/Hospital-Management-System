@@ -12,7 +12,7 @@ All API routes are rooted at `/api`; protected routes require `Authorization: Be
 | Appointments | `GET /doctors/{id}/slots`, `POST /appointments`, `GET /appointments/my`, `GET /appointments/{id}` | Slots public; patient routes patient only |
 | Doctor appointments | `GET /doctor/appointments/pending`, `/today`, `PUT /appointments/{id}/accept`, `/reject` | Doctor only |
 | Treatment/history | `POST /appointments/{id}/treatment`, `GET /patients/{id}/history` | Doctor treatment; patient own or related doctor history |
-| Billing | `POST /appointments/{id}/bill`, `GET /bills/my`, `GET /bills/{id}` | Doctor creation; patient own reads |
+| Billing | `POST /appointments/{id}/bill`, `GET /bills/my`, `GET /bills/{id}`, `POST/GET /bills/{id}/payments`, `GET /doctor/bills`, `GET /doctor/bills/{id}/payments`, `PUT /bills/{id}/void` | Doctor creates, reviews, and voids own pending bills; patient records and reviews own offline payments |
 | Notifications | `GET /notifications`, `PUT /notifications/{id}/read` | Authenticated, own only |
 | Feedback | `POST/GET /feedback` | Patient, own completed appointments |
 | Administration | `GET /admin/patients`, `/doctors`, `/staff`, `PATCH /admin/accounts/{id}/status` | Administrator |

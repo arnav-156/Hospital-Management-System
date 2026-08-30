@@ -575,6 +575,19 @@ public sealed class AuthenticationEndpointTests
             var billResponse = await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/bill", new CreateBillRequest { Amount = 1200m, Description = "Consultation" }); var bill = await billResponse.Content.ReadFromJsonAsync<BillDto>(); Assert.Equal(HttpStatusCode.OK, billResponse.StatusCode); Assert.NotNull(bill); Assert.Equal(1200m, bill.Amount);
             Assert.True((await doctor.GetFromJsonAsync<List<DoctorAppointmentWorkItemDto>>("/api/doctor/appointments/work-items?pageSize=100") ?? []).Single(item => item.AppointmentId == created.AppointmentId).HasBill);
             Assert.Equal(bill.BillId, (await patient.GetFromJsonAsync<BillDto>($"/api/bills/{bill.BillId}"))!.BillId);
+            var paymentResponse = await patient.PostAsJsonAsync($"/api/bills/{bill.BillId}/payments", new RecordPaymentRequest { PaymentMethod = "UPI", ReferenceNumber = "workflow-payment" });
+            var paidBill = await paymentResponse.Content.ReadFromJsonAsync<BillDto>();
+            Assert.Equal(HttpStatusCode.OK, paymentResponse.StatusCode);
+            Assert.NotNull(paidBill);
+            Assert.Equal("Paid", paidBill.Status);
+            Assert.NotNull(paidBill.PaidAt);
+            var payment = Assert.Single(await patient.GetFromJsonAsync<List<PaymentDto>>($"/api/bills/{bill.BillId}/payments") ?? []);
+            Assert.Equal("UPI", payment.PaymentMethod);
+            Assert.Equal("workflow-payment", payment.ReferenceNumber);
+            Assert.Contains(await doctor.GetFromJsonAsync<List<BillDto>>("/api/doctor/bills?pageSize=100") ?? [], item => item.BillId == bill.BillId && item.Status == "Paid");
+            Assert.Single(await doctor.GetFromJsonAsync<List<PaymentDto>>($"/api/doctor/bills/{bill.BillId}/payments") ?? []);
+            Assert.Equal(HttpStatusCode.Conflict, (await patient.PostAsJsonAsync($"/api/bills/{bill.BillId}/payments", new RecordPaymentRequest { PaymentMethod = "Card" })).StatusCode);
+            Assert.Equal(HttpStatusCode.Conflict, (await doctor.PutAsJsonAsync($"/api/bills/{bill.BillId}/void", new VoidBillRequest { Reason = "Already paid" })).StatusCode);
             var notifications = await patient.GetFromJsonAsync<List<NotificationDto>>("/api/notifications"); Assert.NotNull(notifications); var notification = Assert.Single(notifications, item => item.NotificationType == "BillGenerated"); var read = await patient.PutAsync($"/api/notifications/{notification.NotificationId}/read", null); Assert.Equal(HttpStatusCode.OK, read.StatusCode);
             var feedbackResponse = await patient.PostAsJsonAsync("/api/feedback", new CreateFeedbackRequest { AppointmentId = created.AppointmentId, Rating = 5, Comments = "Excellent" }); var feedback = await feedbackResponse.Content.ReadFromJsonAsync<FeedbackDto>(); Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode); Assert.NotNull(feedback); Assert.Equal((byte)5, feedback.Rating); Assert.Contains(await patient.GetFromJsonAsync<List<FeedbackDto>>("/api/feedback") ?? [], item => item.FeedbackId == feedback.FeedbackId);
             var cancellationSlot = slot.AddHours(1);
@@ -660,6 +673,15 @@ public sealed class AuthenticationEndpointTests
             Assert.NotNull(bill);
             Assert.Equal(billDueDate, bill.DueDate);
             Assert.Equal(HttpStatusCode.NotFound, (await otherPatient.GetAsync($"/api/bills/{bill.BillId}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await otherPatient.PostAsJsonAsync($"/api/bills/{bill.BillId}/payments", new RecordPaymentRequest { PaymentMethod = "Cash" })).StatusCode);
+            var voidResponse = await doctor.PutAsJsonAsync($"/api/bills/{bill.BillId}/void", new VoidBillRequest { Reason = "Duplicate billing test" });
+            var voidedBill = await voidResponse.Content.ReadFromJsonAsync<BillDto>();
+            Assert.Equal(HttpStatusCode.OK, voidResponse.StatusCode);
+            Assert.NotNull(voidedBill);
+            Assert.Equal("Void", voidedBill.Status);
+            Assert.Equal("Duplicate billing test", voidedBill.VoidReason);
+            Assert.NotNull(voidedBill.VoidedAt);
+            Assert.Equal(HttpStatusCode.Conflict, (await patient.PostAsJsonAsync($"/api/bills/{bill.BillId}/payments", new RecordPaymentRequest { PaymentMethod = "Cash" })).StatusCode);
         }
         finally
         {
@@ -699,6 +721,8 @@ public sealed class AuthenticationEndpointTests
                 var appointments = await dbContext.Appointments.Where(candidate => candidate.PatientId == patient.PatientId).ToListAsync();
                 var appointmentIds = appointments.Select(appointment => appointment.AppointmentId).ToList();
                 dbContext.Feedbacks.RemoveRange(await dbContext.Feedbacks.Where(feedback => appointmentIds.Contains(feedback.AppointmentId)).ToListAsync());
+                var billIds = await dbContext.Bills.Where(bill => appointmentIds.Contains(bill.AppointmentId)).Select(bill => bill.BillId).ToListAsync();
+                dbContext.BillPayments.RemoveRange(await dbContext.BillPayments.Where(payment => billIds.Contains(payment.BillId)).ToListAsync());
                 dbContext.Bills.RemoveRange(await dbContext.Bills.Where(bill => appointmentIds.Contains(bill.AppointmentId)).ToListAsync());
                 dbContext.Treatments.RemoveRange(await dbContext.Treatments.Where(treatment => appointmentIds.Contains(treatment.AppointmentId)).ToListAsync());
                 dbContext.Appointments.RemoveRange(appointments);

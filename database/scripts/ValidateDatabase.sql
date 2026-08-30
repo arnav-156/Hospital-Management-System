@@ -10,7 +10,7 @@ GO
 DECLARE @requiredTables table (TableName sysname NOT NULL PRIMARY KEY);
 INSERT INTO @requiredTables (TableName)
 VALUES (N'Users'), (N'Departments'), (N'Patients'), (N'Doctors'), (N'Staff'),
-       (N'Appointments'), (N'Treatments'), (N'Bills'), (N'Notifications'), (N'Feedback'), (N'AiSummaryAudits');
+       (N'Appointments'), (N'Treatments'), (N'Bills'), (N'BillPayments'), (N'Notifications'), (N'Feedback'), (N'AiSummaryAudits');
 
 IF EXISTS
 (
@@ -28,6 +28,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Appoi
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Appointments') AND name = N'IX_Appointments_DoctorId_AppointmentDateTime_Status')
     THROW 51010, 'Schema validation failed: doctor/date/status appointment index is missing.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.BillPayments') AND name = N'UQ_BillPayments_BillId')
+    THROW 51011, 'Schema validation failed: one payment per bill constraint is missing.', 1;
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin@hospital.example')
     THROW 51003, 'Seed validation failed: development administrator is missing.', 1;
