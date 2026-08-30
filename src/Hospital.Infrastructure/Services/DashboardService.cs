@@ -42,7 +42,7 @@ public sealed class DashboardService(HospitalManagementDbContext dbContext, Time
         var monthEnd = monthStart.AddMonths(1);
 
         return new DashboardSummaryDto(
-            0,
+            await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == doctorId && appointment.AppointmentDateTime > timeProvider.GetUtcNow().UtcDateTime && appointment.Status == "Accepted", cancellationToken),
             await dbContext.Notifications.CountAsync(notification => notification.UserId == userId && !notification.IsRead, cancellationToken),
             0m,
             await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == doctorId && appointment.Status == "Pending", cancellationToken),

@@ -37,6 +37,8 @@ public sealed class AppointmentsController(IAppointmentService appointments) : C
     public async Task<ActionResult<IReadOnlyList<DoctorAppointmentWorkItemDto>>> PendingWorkItems([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetDoctorPendingWorkItemsAsync(UserId, pagination, ct));
     [Authorize(Roles = UserRoles.Doctor), HttpGet("doctor/appointments/today-work-items")]
     public async Task<ActionResult<IReadOnlyList<DoctorAppointmentWorkItemDto>>> TodayWorkItems([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetDoctorTodayWorkItemsAsync(UserId, pagination, ct));
+    [Authorize(Roles = UserRoles.Doctor), HttpGet("doctor/appointments/upcoming-work-items")]
+    public async Task<ActionResult<IReadOnlyList<DoctorAppointmentWorkItemDto>>> UpcomingWorkItems([FromQuery] PaginationRequest pagination, CancellationToken ct) => Ok(await appointments.GetDoctorUpcomingWorkItemsAsync(UserId, pagination, ct));
     [Authorize(Roles = UserRoles.Doctor), HttpPut("appointments/{appointmentId:int}/accept")]
     public async Task<ActionResult<AppointmentDto>> Accept(int appointmentId, AppointmentDecisionRequest request, CancellationToken ct) => Ok(await appointments.DecideAsync(UserId, appointmentId, true, request.Note, ct));
     [Authorize(Roles = UserRoles.Doctor), HttpPut("appointments/{appointmentId:int}/reject")]

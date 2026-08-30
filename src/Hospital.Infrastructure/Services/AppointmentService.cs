@@ -74,6 +74,12 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
         var day = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).ToDateTime(TimeOnly.MinValue);
         return await db.Appointments.AsNoTracking().Where(appointment => appointment.DoctorId == doctor.DoctorId && appointment.AppointmentDateTime >= day && appointment.AppointmentDateTime < day.AddDays(1) && appointment.Status != "Rejected" && appointment.Status != "Cancelled").OrderBy(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(appointment => new DoctorAppointmentWorkItemDto(appointment.AppointmentId, appointment.PatientId, appointment.Patient.FirstName + " " + appointment.Patient.LastName, appointment.Patient.MedicalRecordNumber, appointment.DepartmentId, appointment.Doctor.Department.Name, appointment.AppointmentDateTime, appointment.Status, appointment.Bills.Count > 0, appointment.Reason)).ToListAsync(ct);
     }
+    public async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorUpcomingWorkItemsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
+    {
+        var doctor = await db.Doctors.SingleOrDefaultAsync(candidate => candidate.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found.");
+        var now = clock.GetUtcNow().UtcDateTime;
+        return await db.Appointments.AsNoTracking().Where(appointment => appointment.DoctorId == doctor.DoctorId && appointment.AppointmentDateTime > now && appointment.Status == "Accepted").OrderBy(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(appointment => new DoctorAppointmentWorkItemDto(appointment.AppointmentId, appointment.PatientId, appointment.Patient.FirstName + " " + appointment.Patient.LastName, appointment.Patient.MedicalRecordNumber, appointment.DepartmentId, appointment.Doctor.Department.Name, appointment.AppointmentDateTime, appointment.Status, appointment.Bills.Count > 0, appointment.Reason)).ToListAsync(ct);
+    }
     private async Task<IReadOnlyList<DoctorAppointmentWorkItemDto>> GetDoctorWorkItemsAsync(int userId, PaginationRequest pagination, bool pendingOnly, CancellationToken ct)
     {
         var doctor = await db.Doctors.SingleOrDefaultAsync(d => d.UserId == userId, ct) ?? throw new NotFoundException("Doctor profile not found.");

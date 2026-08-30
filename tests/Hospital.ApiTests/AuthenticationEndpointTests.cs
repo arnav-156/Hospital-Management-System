@@ -199,18 +199,21 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
             Assert.NotNull(profile);
 
+            var queuePrefix = $"Pending queue {Guid.NewGuid():N}";
+            int baselinePendingCount;
             await using (var scope = factory.Services.CreateAsyncScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                baselinePendingCount = await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == 1 && appointment.Status == "Pending");
                 dbContext.Appointments.AddRange(Enumerable.Range(1, 26).Select(number => new Hospital.Infrastructure.Data.Entities.Appointment
                 {
                     PatientId = profile.PatientId,
                     DoctorId = 1,
                     DepartmentId = 1,
-                    AppointmentDateTime = new DateTime(2036, 1, 1, 10, 0, 0, DateTimeKind.Utc).AddDays(number),
+                    AppointmentDateTime = DateTime.UtcNow.Date.AddYears(50).AddDays(number).AddHours(10),
                     DurationMinutes = 30,
                     Status = "Pending",
-                    Reason = $"Pending queue appointment {number}",
+                    Reason = $"{queuePrefix} {number}",
                     CreatedAt = DateTime.UtcNow,
                 }));
                 await dbContext.SaveChangesAsync();
@@ -221,11 +224,15 @@ public sealed class AuthenticationEndpointTests
             Assert.NotNull(doctorAuthentication);
             doctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", doctorAuthentication.AccessToken);
 
-            var secondPage = await doctor.GetFromJsonAsync<List<DoctorAppointmentWorkItemDto>>("/api/doctor/appointments/pending-work-items?page=2&pageSize=25");
+            var firstInjectedPage = (baselinePendingCount + 1 + 24) / 25;
+            var lastInjectedPage = (baselinePendingCount + 26 + 24) / 25;
+            var firstPage = await doctor.GetFromJsonAsync<List<DoctorAppointmentWorkItemDto>>($"/api/doctor/appointments/pending-work-items?page={firstInjectedPage}&pageSize=25");
+            var lastPage = await doctor.GetFromJsonAsync<List<DoctorAppointmentWorkItemDto>>($"/api/doctor/appointments/pending-work-items?page={lastInjectedPage}&pageSize=25");
 
-            Assert.Single(secondPage ?? []);
-            Assert.Equal("Pending queue appointment 26", secondPage![0].Reason);
-            Assert.All(secondPage, item => Assert.Equal("Pending", item.Status));
+            Assert.Contains(firstPage ?? [], item => item.Reason == $"{queuePrefix} 1");
+            Assert.Contains(lastPage ?? [], item => item.Reason == $"{queuePrefix} 26");
+            Assert.All(firstPage ?? [], item => Assert.Equal("Pending", item.Status));
+            Assert.All(lastPage ?? [], item => Assert.Equal("Pending", item.Status));
         }
         finally
         {
@@ -726,6 +733,53 @@ public sealed class AuthenticationEndpointTests
             using var unrelatedDoctor = factory.CreateClient(); unrelatedDoctor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(UserRoles.Doctor, DateTime.UtcNow.AddMinutes(10), 3)); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.GetAsync($"/api/patients/{profile.PatientId}/history")).StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await unrelatedDoctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
         }
         finally { await DeleteUserAsync(factory, email); }
+    }
+
+    [Fact]
+    public async Task DoctorCanReadUpcomingAppointmentsAndNotifications()
+    {
+        var email = NewTestEmail();
+        using var factory = new TestWebApplicationFactory();
+        using var patientClient = factory.CreateClient();
+        using var doctorClient = factory.CreateClient();
+
+        try
+        {
+            var registrationResponse = await patientClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "UpcomingScheduleTest!1" });
+            var patient = await registrationResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(patient);
+            patientClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", patient.AccessToken);
+            Assert.Equal(HttpStatusCode.OK, (await patientClient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Upcoming", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) })).StatusCode);
+
+            var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14));
+            var slots = await patientClient.GetFromJsonAsync<List<DateTime>>($"/api/doctors/1/slots?date={date:yyyy-MM-dd}");
+            Assert.NotNull(slots);
+            var appointmentResponse = await patientClient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = slots.First(), Reason = "Upcoming schedule test" });
+            var appointment = await appointmentResponse.Content.ReadFromJsonAsync<AppointmentDto>();
+            Assert.Equal(HttpStatusCode.Created, appointmentResponse.StatusCode);
+            Assert.NotNull(appointment);
+
+            var doctorLogin = await doctorClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "dr.ada@hospital.example", Password = "DevelopmentOnly!123" });
+            var doctor = await doctorLogin.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(doctor);
+            doctorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", doctor.AccessToken);
+            Assert.Equal(HttpStatusCode.OK, (await doctorClient.PutAsJsonAsync($"/api/appointments/{appointment.AppointmentId}/accept", new AppointmentDecisionRequest())).StatusCode);
+
+            var upcoming = await doctorClient.GetFromJsonAsync<List<DoctorAppointmentWorkItemDto>>("/api/doctor/appointments/upcoming-work-items?pageSize=100");
+            var notifications = await doctorClient.GetFromJsonAsync<List<NotificationDto>>("/api/notifications?pageSize=100");
+            var dashboard = await doctorClient.GetFromJsonAsync<DashboardSummaryDto>("/api/dashboard");
+
+            Assert.NotNull(upcoming);
+            Assert.Contains(upcoming, item => item.AppointmentId == appointment.AppointmentId && item.Status == "Accepted");
+            Assert.NotNull(notifications);
+            Assert.Contains(notifications, notification => notification.NotificationType == "AppointmentRequested");
+            Assert.NotNull(dashboard);
+            Assert.True(dashboard.UpcomingAppointments >= 1);
+        }
+        finally
+        {
+            await DeleteUserAsync(factory, email);
+        }
     }
 
     [Fact]

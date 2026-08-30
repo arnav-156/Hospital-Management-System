@@ -20,7 +20,7 @@ async function api(path, options = {}) {
 
 const pages = {
   Patient: ['Dashboard', 'Profile', 'Departments', 'Doctors', 'Book appointment', 'My appointments', 'Treatment history', 'Bills', 'Notifications', 'Feedback'],
-  Doctor: ['Dashboard', 'Profile', 'Pending appointments', 'Today', 'Patient history', 'Treatment & prescription', 'Billing'],
+  Doctor: ['Dashboard', 'Profile', 'Pending appointments', 'Today', 'Upcoming appointments', 'Notifications', 'Patient history', 'Treatment & prescription', 'Billing'],
   Administrator: ['Dashboard', 'Patients', 'Doctors', 'Staff', 'Departments'],
 };
 const pageForRole = (role, candidate) => pages[role]?.includes(candidate) ? candidate : 'Dashboard';
@@ -118,6 +118,7 @@ function Page({ role, page, onNotice, onUnauthorized }) {
   if (page === 'Feedback') return <FeedbackForm onNotice={onNotice} />;
   if (page === 'Pending appointments') return <DoctorAppointments onNotice={onNotice} onUnauthorized={onUnauthorized} />;
   if (page === 'Today') return <DoctorToday />;
+  if (page === 'Upcoming appointments') return <DoctorUpcoming />;
   if (page === 'Patient history') return <DoctorHistoryForm onNotice={onNotice} />;
   if (page === 'Treatment & prescription') return <TreatmentForm onNotice={onNotice} />;
   if (page === 'Billing') return <BillingForm onNotice={onNotice} />;
@@ -163,14 +164,15 @@ function LiveDashboard({ role }) {
         const cards = role === 'Patient'
           ? [{ label: 'Upcoming appointments', value: String(summary.upcomingAppointments) }, { label: 'Unread notifications', value: String(summary.unreadNotifications) }, { label: 'Outstanding bills', value: `₹ ${Number(summary.outstandingBills).toFixed(2)}` }]
           : role === 'Doctor'
-            ? [{ label: 'Pending reviews', value: String(summary.pendingReviews) }, { label: 'Unread notifications', value: String(summary.unreadNotifications) }, { label: 'Patients this month', value: String(summary.patientsThisMonth) }]
+            ? [{ label: 'Pending reviews', value: String(summary.pendingReviews) }, { label: 'Upcoming appointments', value: String(summary.upcomingAppointments) }, { label: 'Unread notifications', value: String(summary.unreadNotifications) }, { label: 'Patients this month', value: String(summary.patientsThisMonth) }]
             : [{ label: 'Staff accounts', value: String(summary.activeStaffAccounts) }, { label: 'Active doctors', value: String(summary.activeDoctors) }, { label: 'Patient records', value: String(summary.patientRecords) }];
         if (active) setState({ loading: false, error: '', cards });
       } catch (error) { if (active) setState({ loading: false, error: error.message, cards: [] }); }
     };
     load(); return () => { active = false; };
   }, [role]);
-  return <>{state.loading && <section className="panel"><p>Loading live dashboard data…</p></section>}{state.error && <section className="panel"><p className="error">{state.error}</p></section>}{!state.loading && !state.error && <><section className="stats">{state.cards.map((card) => <Card key={card.label} {...card} />)}</section><section className="panel"><h2>Today at a glance</h2><p>These figures are calculated from all records available to your account.</p></section></>}</>;
+  const summaryTitle = role === 'Doctor' ? 'Practice at a glance' : role === 'Patient' ? 'Your care at a glance' : 'Operations at a glance';
+  return <>{state.loading && <section className="panel"><p>Loading live dashboard data…</p></section>}{state.error && <section className="panel"><p className="error">{state.error}</p></section>}{!state.loading && !state.error && <><section className="stats">{state.cards.map((card) => <Card key={card.label} {...card} />)}</section><section className="panel"><h2>{summaryTitle}</h2><p>These figures reflect your current schedule, notifications, and account activity.</p></section></>}</>;
 }
 function NotificationList() {
   const pageSize = 25;
@@ -185,7 +187,7 @@ function useDoctorWorkItems(scope = 'all', itemsPerPage = 25) {
   const load = async (requestedPage = page) => {
     setState({ loading: true, error: '', records: [] });
     try {
-      const route = scope === 'pending' ? 'pending-work-items' : scope === 'today' ? 'today-work-items' : 'work-items';
+      const route = scope === 'pending' ? 'pending-work-items' : scope === 'today' ? 'today-work-items' : scope === 'upcoming' ? 'upcoming-work-items' : 'work-items';
       const result = await fetchPagedRecords(`/api/doctor/appointments/${route}`, requestedPage, itemsPerPage);
       setPage(requestedPage); setHasNext(result.hasNext);
       setState({ loading: false, error: '', records: result.records });
@@ -223,6 +225,10 @@ function DoctorAppointments({ onNotice, onUnauthorized }) {
 function DoctorToday() {
   const { loading, error, records, page, hasNext, load } = useDoctorWorkItems('today');
   return <section className="panel"><div className="panel-title"><h2>Today&apos;s appointments</h2><button className="secondary" onClick={() => load(page)}>Refresh</button></div>{loading && <p>Loading live data…</p>}{error && <p className="error">{error}</p>}{!loading && !error && records.length === 0 && <p className="muted">No appointments are scheduled for today.</p>}{records.map((record) => <div className="table" key={record.appointmentId}><div><b>{record.patientName} · {record.medicalRecordNumber}</b><span>{record.appointmentDateTime?.slice(11, 16)} UTC · {record.status}</span><span>{record.reason || 'No reason provided'}</span></div></div>)}{!loading && !error && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
+}
+function DoctorUpcoming() {
+  const { loading, error, records, page, hasNext, load } = useDoctorWorkItems('upcoming');
+  return <section className="panel"><div className="panel-title"><h2>Upcoming appointments</h2><button className="secondary" onClick={() => load(page)}>Refresh</button></div><p className="muted">Accepted appointments scheduled after the current time are shown here. Pending requests remain under Pending appointments.</p>{loading && <p>Loading live data…</p>}{error && <p className="error">{error}</p>}{!loading && !error && records.length === 0 && <p className="muted">No accepted appointments are scheduled ahead.</p>}{records.map((record) => <div className="table" key={record.appointmentId}><div><b>{record.patientName} · {record.medicalRecordNumber}</b><span>{record.appointmentDateTime?.slice(0, 16)} UTC · {record.status}</span><span>{record.reason || 'No reason provided'}</span></div></div>)}{!loading && !error && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
 }
 
 function DoctorHistoryForm({ onNotice }) {
