@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
+const activePageStorageKey = 'activePage';
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5141';
 async function api(path, options = {}) {
   const response = await fetch(`${apiUrl}${path}`, { ...options, headers: { Authorization: `Bearer ${sessionStorage.getItem('accessToken')}`, 'Content-Type': 'application/json', ...(options.headers ?? {}) } });
@@ -9,6 +10,7 @@ async function api(path, options = {}) {
   if (response.status === 401) {
     sessionStorage.removeItem('accessToken');
     sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem(activePageStorageKey);
     window.dispatchEvent(new Event('hospital:unauthorized'));
     throw new Error('Your session has expired. Please sign in again.');
   }
@@ -21,33 +23,42 @@ const pages = {
   Doctor: ['Dashboard', 'Profile', 'Pending appointments', 'Today', 'Patient history', 'Treatment & prescription', 'Billing'],
   Administrator: ['Dashboard', 'Patients', 'Doctors', 'Staff', 'Departments'],
 };
+const pageForRole = (role, candidate) => pages[role]?.includes(candidate) ? candidate : 'Dashboard';
+const savedPageForRole = (role) => pageForRole(role, sessionStorage.getItem(activePageStorageKey));
 
 function App() {
   const savedUser = JSON.parse(sessionStorage.getItem('currentUser') ?? 'null');
   const [role, setRole] = useState(savedUser?.role ?? 'Patient');
-  const [page, setPage] = useState('Dashboard');
+  const [page, setPage] = useState(() => savedPageForRole(savedUser?.role ?? 'Patient'));
   const [signedIn, setSignedIn] = useState(() => Boolean(sessionStorage.getItem('accessToken')));
   const [notice, setNotice] = useState('');
   const menu = pages[role];
-  const navigate = (next) => { setPage(next); setNotice(''); };
+  const persistPage = (next) => { sessionStorage.setItem(activePageStorageKey, next); setPage(next); };
+  const navigate = (next) => { persistPage(pageForRole(role, next)); setNotice(''); };
   useEffect(() => {
     if (!sessionStorage.getItem('accessToken')) return;
     api('/api/auth/me').then((user) => {
       sessionStorage.setItem('currentUser', JSON.stringify(user));
       setRole(user.role);
+      setPage((current) => {
+        const next = pageForRole(user.role, current);
+        sessionStorage.setItem(activePageStorageKey, next);
+        return next;
+      });
     }).catch(() => {
       sessionStorage.removeItem('accessToken');
       sessionStorage.removeItem('currentUser');
+      sessionStorage.removeItem(activePageStorageKey);
       setSignedIn(false);
     });
   }, []);
   useEffect(() => {
-    const signOutExpiredSession = () => setSignedIn(false);
+    const signOutExpiredSession = () => { sessionStorage.removeItem(activePageStorageKey); setPage('Dashboard'); setSignedIn(false); };
     window.addEventListener('hospital:unauthorized', signOutExpiredSession);
     return () => window.removeEventListener('hospital:unauthorized', signOutExpiredSession);
   }, []);
-  if (!signedIn) return <Auth onSignIn={async (user, isNewPatient) => { setRole(user.role); if (isNewPatient && user.role === 'Patient') { setPage('Profile'); } else if (user.role === 'Patient') { try { await api('/api/profile/me'); setPage('Dashboard'); } catch (error) { setPage(error.message.includes('Patient profile not found') ? 'Profile' : 'Dashboard'); } } else { setPage('Dashboard'); } setSignedIn(true); }} />;
-  return <div className="shell"><aside><div className="brand">Medi<span>Core</span></div><p className="role">{role} portal</p>{menu.map((item) => <button key={item} className={page === item ? 'nav active' : 'nav'} onClick={() => navigate(item)}>{item}</button>)}<button className="signout" onClick={() => { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); setSignedIn(false); }}>Sign out</button></aside><main className="content"><header><div><p className="eyebrow">Hospital management system</p><h1>{page}</h1></div><p className="role">{role}</p></header>{notice && <p className="notice">{notice}</p>}<Page role={role} page={page} onNotice={setNotice} onUnauthorized={setSignedIn} /></main></div>;
+  if (!signedIn) return <Auth onSignIn={async (user, isNewPatient) => { setRole(user.role); let next = 'Dashboard'; if (isNewPatient && user.role === 'Patient') { next = 'Profile'; } else if (user.role === 'Patient') { try { await api('/api/profile/me'); } catch (error) { next = error.message.includes('Patient profile not found') ? 'Profile' : 'Dashboard'; } } persistPage(next); setSignedIn(true); }} />;
+  return <div className="shell"><aside><div className="brand">Medi<span>Core</span></div><p className="role">{role} portal</p>{menu.map((item) => <button key={item} className={page === item ? 'nav active' : 'nav'} onClick={() => navigate(item)}>{item}</button>)}<button className="signout" onClick={() => { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); sessionStorage.removeItem(activePageStorageKey); setPage('Dashboard'); setSignedIn(false); }}>Sign out</button></aside><main className="content"><header><div><p className="eyebrow">Hospital management system</p><h1>{page}</h1></div><p className="role">{role}</p></header>{notice && <p className="notice">{notice}</p>}<Page role={role} page={page} onNotice={setNotice} onUnauthorized={setSignedIn} /></main></div>;
 }
 
 function Auth({ onSignIn }) {
@@ -88,7 +99,7 @@ function Page({ role, page, onNotice, onUnauthorized }) {
   const [listPage, setListPage] = useState(1);
   const routes = { ...(role === 'Patient' ? {} : { Profile: '/api/profile/me' }), Departments: role === 'Administrator' ? undefined : '/api/departments', Doctors: '/api/doctors', 'My appointments': role === 'Patient' ? undefined : '/api/appointments/my/summaries', Bills: '/api/bills/my', Notifications: '/api/notifications', 'Pending appointments': '/api/doctor/appointments/pending', Today: '/api/doctor/appointments/today', Patients: '/api/admin/patients', Staff: '/api/admin/staff' };
   useEffect(() => { setListPage(1); }, [page]);
-  useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null, isList: false, hasNext: false }); return; } let active = true; setState({ loading: true, error: '', records: null, isList: false, hasNext: false }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const separator = target.includes('?') ? '&' : '?'; const data = await api(`${target}${separator}page=${listPage}&pageSize=${pageSize}`); const isList = Array.isArray(data); if (active) setState({ loading: false, error: '', records: isList ? data : [data], isList, hasNext: isList && data.length === pageSize }); } catch (error) { if (error.message.includes('401')) { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); onUnauthorized(false); } if (active) setState({ loading: false, error: error.message, records: null, isList: false, hasNext: false }); } }; load(); return () => { active = false; }; }, [page, listPage, onUnauthorized, reloadVersion]);
+  useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null, isList: false, hasNext: false }); return; } let active = true; setState({ loading: true, error: '', records: null, isList: false, hasNext: false }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const separator = target.includes('?') ? '&' : '?'; const data = await api(`${target}${separator}page=${listPage}&pageSize=${pageSize}`); const isList = Array.isArray(data); if (active) setState({ loading: false, error: '', records: isList ? data : [data], isList, hasNext: isList && data.length === pageSize }); } catch (error) { if (error.message.includes('401')) { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); sessionStorage.removeItem(activePageStorageKey); onUnauthorized(false); } if (active) setState({ loading: false, error: error.message, records: null, isList: false, hasNext: false }); } }; load(); return () => { active = false; }; }, [page, listPage, onUnauthorized, reloadVersion]);
   if (page === 'Dashboard') return <LiveDashboard role={role} />;
   if (role === 'Patient' && page === 'Profile') return <PatientProfileForm onNotice={onNotice} />;
   if (page === 'Book appointment') return <BookingForm onNotice={onNotice} />;
