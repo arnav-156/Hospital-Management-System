@@ -25,6 +25,12 @@ const pages = {
 };
 const pageForRole = (role, candidate) => pages[role]?.includes(candidate) ? candidate : 'Dashboard';
 const savedPageForRole = (role) => pageForRole(role, sessionStorage.getItem(activePageStorageKey));
+const fetchPagedRecords = async (path, page, pageSize) => {
+  const separator = path.includes('?') ? '&' : '?';
+  const records = await api(`${path}${separator}page=${page}&pageSize=${pageSize}`);
+  const hasNext = records.length === pageSize && (await api(`${path}${separator}page=${page + 1}&pageSize=${pageSize}`)).length > 0;
+  return { records, hasNext };
+};
 
 function App() {
   const savedUser = JSON.parse(sessionStorage.getItem('currentUser') ?? 'null');
@@ -101,7 +107,7 @@ function Page({ role, page, onNotice, onUnauthorized }) {
   const [listPage, setListPage] = useState(1);
   const routes = { ...(role === 'Patient' ? {} : { Profile: '/api/profile/me' }), Departments: role === 'Administrator' ? undefined : '/api/departments', Doctors: '/api/doctors', 'My appointments': role === 'Patient' ? undefined : '/api/appointments/my/summaries', Bills: '/api/bills/my', Notifications: '/api/notifications', 'Pending appointments': '/api/doctor/appointments/pending', Today: '/api/doctor/appointments/today', Patients: '/api/admin/patients', Staff: '/api/admin/staff' };
   useEffect(() => { setListPage(1); }, [page]);
-  useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null, isList: false, hasNext: false }); return; } let active = true; setState({ loading: true, error: '', records: null, isList: false, hasNext: false }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const separator = target.includes('?') ? '&' : '?'; const data = await api(`${target}${separator}page=${listPage}&pageSize=${pageSize}`); const isList = Array.isArray(data); if (active) setState({ loading: false, error: '', records: isList ? data : [data], isList, hasNext: isList && data.length === pageSize }); } catch (error) { if (error.message.includes('401')) onUnauthorized(); if (active) setState({ loading: false, error: error.message, records: null, isList: false, hasNext: false }); } }; load(); return () => { active = false; }; }, [page, listPage, onUnauthorized, reloadVersion]);
+  useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null, isList: false, hasNext: false }); return; } let active = true; setState({ loading: true, error: '', records: null, isList: false, hasNext: false }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const result = await fetchPagedRecords(target, listPage, pageSize); const isList = Array.isArray(result.records); if (active) setState({ loading: false, error: '', records: isList ? result.records : [result.records], isList, hasNext: isList && result.hasNext }); } catch (error) { if (error.message.includes('401')) onUnauthorized(); if (active) setState({ loading: false, error: error.message, records: null, isList: false, hasNext: false }); } }; load(); return () => { active = false; }; }, [page, listPage, onUnauthorized, reloadVersion]);
   if (page === 'Dashboard') return <LiveDashboard role={role} />;
   if (role === 'Patient' && page === 'Profile') return <PatientProfileForm onNotice={onNotice} />;
   if (page === 'Book appointment') return <BookingForm onNotice={onNotice} />;
@@ -157,7 +163,7 @@ function LiveDashboard({ role }) {
 function NotificationList() {
   const pageSize = 25;
   const [state, setState] = useState({ loading: true, error: '', records: [] }); const [page, setPage] = useState(1); const [hasNext, setHasNext] = useState(false);
-  const load = async (requestedPage = page) => { setState({ loading: true, error: '', records: [] }); try { const records = await api(`/api/notifications?page=${requestedPage}&pageSize=${pageSize}`); setPage(requestedPage); setHasNext(records.length === pageSize); setState({ loading: false, error: '', records }); } catch (error) { setState({ loading: false, error: error.message, records: [] }); } };
+  const load = async (requestedPage = page) => { setState({ loading: true, error: '', records: [] }); try { const result = await fetchPagedRecords('/api/notifications', requestedPage, pageSize); setPage(requestedPage); setHasNext(result.hasNext); setState({ loading: false, error: '', records: result.records }); } catch (error) { setState({ loading: false, error: error.message, records: [] }); } };
   useEffect(() => { load(1); }, []);
   const markRead = async (notificationId) => { try { const updated = await api(`/api/notifications/${notificationId}/read`, { method: 'PUT' }); setState((current) => ({ ...current, records: current.records.map((notification) => notification.notificationId === notificationId ? updated : notification) })); } catch (error) { setState((current) => ({ ...current, error: error.message })); } };
   return <section className="panel"><div className="panel-title"><h2>Notifications</h2><button className="secondary" onClick={() => load(page)} disabled={state.loading}>Refresh</button></div>{state.loading && <p>Loading live data…</p>}{state.error && <p className="error">{state.error}</p>}{!state.loading && !state.error && state.records.length === 0 && <p className="muted">No notifications.</p>}{state.records.map((notification) => <div className="table" key={notification.notificationId}><div><b>{notification.notificationType}</b><span>{notification.message}</span><span>{notification.createdAt?.slice(0, 16)} UTC</span></div><div>{notification.isRead ? <span className="pill">Read</span> : <button className="secondary" onClick={() => markRead(notification.notificationId)}>Mark as read</button>}</div></div>)}{!state.loading && !state.error && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
@@ -168,9 +174,9 @@ function useDoctorWorkItems(scope = 'all', itemsPerPage = 25) {
     setState({ loading: true, error: '', records: [] });
     try {
       const route = scope === 'pending' ? 'pending-work-items' : scope === 'today' ? 'today-work-items' : 'work-items';
-      const records = await api(`/api/doctor/appointments/${route}?page=${requestedPage}&pageSize=${itemsPerPage}`);
-      setPage(requestedPage); setHasNext(records.length === itemsPerPage);
-      setState({ loading: false, error: '', records });
+      const result = await fetchPagedRecords(`/api/doctor/appointments/${route}`, requestedPage, itemsPerPage);
+      setPage(requestedPage); setHasNext(result.hasNext);
+      setState({ loading: false, error: '', records: result.records });
     } catch (error) {
       setState({ loading: false, error: error.message, records: [] });
     }
@@ -235,8 +241,8 @@ function BookingForm({ onNotice }) {
 
   useEffect(() => {
     let active = true;
-    api(`/api/departments?page=${departmentPage}&pageSize=25`)
-      .then((records) => { if (active) { setDepartments(records); setHasNextDepartmentPage(records.length === 25); } })
+    fetchPagedRecords('/api/departments', departmentPage, 25)
+      .then((result) => { if (active) { setDepartments(result.records); setHasNextDepartmentPage(result.hasNext); } })
       .catch((failure) => { if (active) setError(failure.message); })
       .finally(() => { if (active) setLoadingCatalog(false); });
     return () => { active = false; };
@@ -250,8 +256,8 @@ function BookingForm({ onNotice }) {
     }
     let active = true;
     setLoadingDoctors(true);
-    api(`/api/departments/${departmentId}/doctors?page=${doctorPage}&pageSize=25`)
-      .then((records) => { if (active) { setDoctors(records); setHasNextDoctorPage(records.length === 25); } })
+    fetchPagedRecords(`/api/departments/${departmentId}/doctors`, doctorPage, 25)
+      .then((result) => { if (active) { setDoctors(result.records); setHasNextDoctorPage(result.hasNext); } })
       .catch((failure) => { if (active) setError(failure.message); })
       .finally(() => { if (active) setLoadingDoctors(false); });
     return () => { active = false; };
@@ -354,7 +360,7 @@ function BookingForm({ onNotice }) {
 function PatientAppointments({ onNotice }) {
   const pageSize = 25;
   const [state, setState] = useState({ loading: true, error: '', records: [] }); const [cancellingId, setCancellingId] = useState(null); const [page, setPage] = useState(1); const [hasNext, setHasNext] = useState(false);
-  const load = async (requestedPage = page) => { setState({ loading: true, error: '', records: [] }); try { const records = await api(`/api/appointments/my/summaries?page=${requestedPage}&pageSize=${pageSize}`); setPage(requestedPage); setHasNext(records.length === pageSize); setState({ loading: false, error: '', records }); } catch (error) { setState({ loading: false, error: error.message, records: [] }); } };
+  const load = async (requestedPage = page) => { setState({ loading: true, error: '', records: [] }); try { const result = await fetchPagedRecords('/api/appointments/my/summaries', requestedPage, pageSize); setPage(requestedPage); setHasNext(result.hasNext); setState({ loading: false, error: '', records: result.records }); } catch (error) { setState({ loading: false, error: error.message, records: [] }); } };
   useEffect(() => { load(1); }, []);
   const cancel = async (appointmentId) => { setCancellingId(appointmentId); try { const updated = await api(`/api/appointments/${appointmentId}/cancel`, { method: 'PUT' }); setState((current) => ({ ...current, records: current.records.map((appointment) => appointment.appointmentId === updated.appointmentId ? { ...appointment, status: updated.status } : appointment) })); onNotice('Appointment cancelled. The time is available for another booking.'); } catch (error) { setState((current) => ({ ...current, error: error.message })); } finally { setCancellingId(null); } };
   const now = new Date().toISOString();
@@ -362,7 +368,7 @@ function PatientAppointments({ onNotice }) {
 }
 function FeedbackForm({ onNotice }) {
   const pageSize = 25; const [appointments, setAppointments] = useState([]); const [appointmentId, setAppointmentId] = useState(''); const [rating, setRating] = useState('5'); const [comments, setComments] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [page, setPage] = useState(1); const [hasNext, setHasNext] = useState(false);
-  const load = async (requestedPage = page) => { setLoading(true); try { const records = await api(`/api/appointments/my/feedback-eligible?page=${requestedPage}&pageSize=${pageSize}`); setPage(requestedPage); setHasNext(records.length === pageSize); setAppointments(records); } catch (failure) { setError(failure.message); } finally { setLoading(false); } };
+  const load = async (requestedPage = page) => { setLoading(true); try { const result = await fetchPagedRecords('/api/appointments/my/feedback-eligible', requestedPage, pageSize); setPage(requestedPage); setHasNext(result.hasNext); setAppointments(result.records); } catch (failure) { setError(failure.message); } finally { setLoading(false); } };
   useEffect(() => { load(1); }, []);
   const submit = async (event) => { event.preventDefault(); setBusy(true); try { setError(''); await api('/api/feedback', { method: 'POST', body: JSON.stringify({ appointmentId: Number(appointmentId), rating: Number(rating), comments }) }); setAppointmentId(''); setComments(''); await load(page); onNotice('Feedback saved. Thank you.'); } catch (failure) { setError(failure.message); } finally { setBusy(false); } };
   return <section className="panel"><h2>Share feedback</h2><p className="muted">You can provide feedback only once for each completed appointment.</p><form className="grid" onSubmit={submit}><label className="wide" htmlFor="feedback-appointment">Completed appointment<select id="feedback-appointment" value={appointmentId} onChange={(event) => setAppointmentId(event.target.value)} disabled={loading || !appointments.length} required><option value="">{loading ? 'Loading completed appointments…' : appointments.length ? 'Choose a completed appointment' : 'No completed appointments need feedback'}</option>{appointments.map((appointment) => <option key={appointment.appointmentId} value={appointment.appointmentId}>{appointment.appointmentDateTime?.slice(0, 16)} UTC{appointment.reason ? ` — ${appointment.reason}` : ''}</option>)}</select></label><label>Rating<select value={rating} onChange={(event) => setRating(event.target.value)}>{[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label className="wide">Comments<textarea value={comments} onChange={(event) => setComments(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary" disabled={busy || loading || !appointments.length}>{busy ? 'Submitting…' : 'Submit feedback'}</button></form>{!loading && <PaginationControls page={page} hasNext={hasNext} onPrevious={() => load(page - 1)} onNext={() => load(page + 1)} />}</section>;
