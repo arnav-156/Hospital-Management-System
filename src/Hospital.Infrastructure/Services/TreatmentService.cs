@@ -19,6 +19,7 @@ public sealed class TreatmentService(HospitalManagementDbContext dbContext, Time
         if (!AppointmentWorkflowRules.CanRecordTreatment(appointment.Status)) throw new ConflictException("Treatment can be recorded only for an accepted appointment.");
         if (await dbContext.Treatments.AnyAsync(candidate => candidate.AppointmentId == appointmentId, cancellationToken)) throw new ConflictException("A treatment already exists for this appointment.");
         var now = timeProvider.GetUtcNow().UtcDateTime;
+        if (appointment.AppointmentDateTime > now) throw new ConflictException("Treatment can be recorded only after the scheduled appointment time.");
         var treatment = new Treatment { AppointmentId = appointment.AppointmentId, PatientId = appointment.PatientId, DoctorId = doctor.DoctorId, Diagnosis = request.Diagnosis?.Trim(), Prescription = request.Prescription?.Trim(), ProgressNotes = request.ProgressNotes?.Trim(), TreatmentNotes = request.TreatmentNotes?.Trim(), TreatmentDateTime = now, CreatedAt = now };
         dbContext.Treatments.Add(treatment); appointment.Status = "Completed"; appointment.UpdatedAt = now;
         try { await dbContext.SaveChangesAsync(cancellationToken); } catch (DbUpdateException) { throw new ConflictException("A treatment already exists for this appointment."); }

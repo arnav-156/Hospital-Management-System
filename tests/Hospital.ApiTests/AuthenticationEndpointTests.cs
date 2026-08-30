@@ -566,6 +566,16 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.NotFound, (await doctor.PostAsync($"/api/patients/{profile.PatientId}/history-summary", null)).StatusCode);
             var accepted = await doctor.PutAsJsonAsync($"/api/appointments/{created.AppointmentId}/accept", new AppointmentDecisionRequest { Note = "Confirmed" }); var decision = await accepted.Content.ReadFromJsonAsync<AppointmentDto>(); Assert.Equal(HttpStatusCode.OK, accepted.StatusCode); Assert.NotNull(decision); Assert.Equal("Accepted", decision.Status);
             Assert.Equal("Accepted", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{created.AppointmentId}"))!.Status);
+            Assert.Equal(HttpStatusCode.Conflict, (await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Premature treatment" })).StatusCode);
+            Assert.Equal("Accepted", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{created.AppointmentId}"))!.Status);
+            Assert.Equal(HttpStatusCode.Conflict, (await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/bill", new CreateBillRequest { Amount = 1200m })).StatusCode);
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                var appointment = await dbContext.Appointments.SingleAsync(item => item.AppointmentId == created.AppointmentId);
+                appointment.AppointmentDateTime = DateTime.UtcNow.AddMinutes(-1);
+                await dbContext.SaveChangesAsync();
+            }
             Assert.Equal(HttpStatusCode.BadRequest, (await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "   " })).StatusCode);
             Assert.Equal("Accepted", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{created.AppointmentId}"))!.Status);
             var treatmentResponse = await doctor.PostAsJsonAsync($"/api/appointments/{created.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Test diagnosis", Prescription = "Test prescription", ProgressNotes = "Stable" }); var treatment = await treatmentResponse.Content.ReadFromJsonAsync<TreatmentDto>(); Assert.Equal(HttpStatusCode.OK, treatmentResponse.StatusCode); Assert.NotNull(treatment);
@@ -662,6 +672,13 @@ public sealed class AuthenticationEndpointTests
             Assert.Equal(HttpStatusCode.Created, completedAppointmentResponse.StatusCode);
             Assert.NotNull(completedAppointment);
             Assert.Equal(HttpStatusCode.OK, (await doctor.PutAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/accept", new AppointmentDecisionRequest())).StatusCode);
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                var appointmentToComplete = await dbContext.Appointments.SingleAsync(item => item.AppointmentId == completedAppointment.AppointmentId);
+                appointmentToComplete.AppointmentDateTime = DateTime.UtcNow.AddMinutes(-1);
+                await dbContext.SaveChangesAsync();
+            }
             Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/treatment", new CreateTreatmentRequest { Diagnosis = "Billing validation diagnosis", TreatmentNotes = "Complete appointment for billing validation" })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await patient.PostAsJsonAsync($"/api/appointments/{completedAppointment.AppointmentId}/bill", new CreateBillRequest { Amount = 99.99m })).StatusCode);
 
