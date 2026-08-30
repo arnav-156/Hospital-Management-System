@@ -172,7 +172,7 @@ public sealed class AuthenticationEndpointTests
             var secondPage = await patient.GetFromJsonAsync<List<PatientAppointmentSummaryDto>>("/api/appointments/my/summaries?page=2&pageSize=25");
 
             Assert.Single(secondPage ?? []);
-            Assert.Equal("Paged appointment 1", secondPage![0].Reason);
+            Assert.Equal("Paged appointment 26", secondPage![0].Reason);
         }
         finally
         {

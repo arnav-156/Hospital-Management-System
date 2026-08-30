@@ -32,11 +32,11 @@ public sealed class AppointmentService(HospitalManagementDbContext db, TimeProvi
         await transaction.CommitAsync(ct);
         return ToDto(appointment);
     }
-    public async Task<IReadOnlyList<AppointmentDto>> GetPatientAppointmentsAsync(int userId, PaginationRequest pagination, CancellationToken ct) { var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found."); return (await db.Appointments.AsNoTracking().Where(a => a.PatientId == patient.PatientId).OrderByDescending(a => a.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList(); }
+    public async Task<IReadOnlyList<AppointmentDto>> GetPatientAppointmentsAsync(int userId, PaginationRequest pagination, CancellationToken ct) { var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found."); return (await db.Appointments.AsNoTracking().Where(a => a.PatientId == patient.PatientId).OrderBy(a => a.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).ToListAsync(ct)).Select(ToDto).ToList(); }
     public async Task<IReadOnlyList<PatientAppointmentSummaryDto>> GetPatientAppointmentSummariesAsync(int userId, PaginationRequest pagination, CancellationToken ct)
     {
         var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == userId, ct) ?? throw new NotFoundException("Patient profile not found.");
-        return await db.Appointments.AsNoTracking().Where(appointment => appointment.PatientId == patient.PatientId).OrderByDescending(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(appointment => new PatientAppointmentSummaryDto(appointment.AppointmentId, appointment.AppointmentDateTime, appointment.Status, appointment.Doctor.FirstName + " " + appointment.Doctor.LastName, appointment.Doctor.Department.Name, appointment.Reason, appointment.DoctorResponseNote)).ToListAsync(ct);
+        return await db.Appointments.AsNoTracking().Where(appointment => appointment.PatientId == patient.PatientId).OrderBy(appointment => appointment.AppointmentDateTime).Skip(pagination.Skip).Take(pagination.PageSize).Select(appointment => new PatientAppointmentSummaryDto(appointment.AppointmentId, appointment.AppointmentDateTime, appointment.Status, appointment.Doctor.FirstName + " " + appointment.Doctor.LastName, appointment.Doctor.Department.Name, appointment.Reason, appointment.DoctorResponseNote)).ToListAsync(ct);
     }
     public async Task<IReadOnlyList<AppointmentDto>> GetPatientFeedbackEligibleAppointmentsAsync(int userId, PaginationRequest pagination, CancellationToken ct)
     {
