@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -35,6 +35,14 @@ function App() {
   const menu = pages[role];
   const persistPage = (next) => { sessionStorage.setItem(activePageStorageKey, next); setPage(next); };
   const navigate = (next) => { persistPage(pageForRole(role, next)); setNotice(''); };
+  const resetSession = useCallback(() => {
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem(activePageStorageKey);
+    setPage('Dashboard');
+    setNotice('');
+    setSignedIn(false);
+  }, []);
   useEffect(() => {
     if (!sessionStorage.getItem('accessToken')) return;
     api('/api/auth/me').then((user) => {
@@ -45,20 +53,14 @@ function App() {
         sessionStorage.setItem(activePageStorageKey, next);
         return next;
       });
-    }).catch(() => {
-      sessionStorage.removeItem('accessToken');
-      sessionStorage.removeItem('currentUser');
-      sessionStorage.removeItem(activePageStorageKey);
-      setSignedIn(false);
-    });
-  }, []);
+    }).catch(resetSession);
+  }, [resetSession]);
   useEffect(() => {
-    const signOutExpiredSession = () => { sessionStorage.removeItem(activePageStorageKey); setPage('Dashboard'); setSignedIn(false); };
-    window.addEventListener('hospital:unauthorized', signOutExpiredSession);
-    return () => window.removeEventListener('hospital:unauthorized', signOutExpiredSession);
-  }, []);
-  if (!signedIn) return <Auth onSignIn={async (user, isNewPatient) => { setRole(user.role); let next = 'Dashboard'; if (isNewPatient && user.role === 'Patient') { next = 'Profile'; } else if (user.role === 'Patient') { try { await api('/api/profile/me'); } catch (error) { next = error.message.includes('Patient profile not found') ? 'Profile' : 'Dashboard'; } } persistPage(next); setSignedIn(true); }} />;
-  return <div className="shell"><aside><div className="brand">Medi<span>Core</span></div><p className="role">{role} portal</p>{menu.map((item) => <button key={item} className={page === item ? 'nav active' : 'nav'} onClick={() => navigate(item)}>{item}</button>)}<button className="signout" onClick={() => { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); sessionStorage.removeItem(activePageStorageKey); setPage('Dashboard'); setSignedIn(false); }}>Sign out</button></aside><main className="content"><header><div><p className="eyebrow">Hospital management system</p><h1>{page}</h1></div><p className="role">{role}</p></header>{notice && <p className="notice">{notice}</p>}<Page role={role} page={page} onNotice={setNotice} onUnauthorized={setSignedIn} /></main></div>;
+    window.addEventListener('hospital:unauthorized', resetSession);
+    return () => window.removeEventListener('hospital:unauthorized', resetSession);
+  }, [resetSession]);
+  if (!signedIn) return <Auth onSignIn={async (user, isNewPatient) => { setNotice(''); setRole(user.role); let next = 'Dashboard'; if (isNewPatient && user.role === 'Patient') { next = 'Profile'; } else if (user.role === 'Patient') { try { await api('/api/profile/me'); } catch (error) { next = error.message.includes('Patient profile not found') ? 'Profile' : 'Dashboard'; } } persistPage(next); setSignedIn(true); }} />;
+  return <div className="shell"><aside><div className="brand">Medi<span>Core</span></div><p className="role">{role} portal</p>{menu.map((item) => <button key={item} className={page === item ? 'nav active' : 'nav'} onClick={() => navigate(item)}>{item}</button>)}<button className="signout" onClick={resetSession}>Sign out</button></aside><main className="content"><header><div><p className="eyebrow">Hospital management system</p><h1>{page}</h1></div><p className="role">{role}</p></header>{notice && <p className="notice">{notice}</p>}<Page role={role} page={page} onNotice={setNotice} onUnauthorized={resetSession} /></main></div>;
 }
 
 function Auth({ onSignIn }) {
@@ -99,7 +101,7 @@ function Page({ role, page, onNotice, onUnauthorized }) {
   const [listPage, setListPage] = useState(1);
   const routes = { ...(role === 'Patient' ? {} : { Profile: '/api/profile/me' }), Departments: role === 'Administrator' ? undefined : '/api/departments', Doctors: '/api/doctors', 'My appointments': role === 'Patient' ? undefined : '/api/appointments/my/summaries', Bills: '/api/bills/my', Notifications: '/api/notifications', 'Pending appointments': '/api/doctor/appointments/pending', Today: '/api/doctor/appointments/today', Patients: '/api/admin/patients', Staff: '/api/admin/staff' };
   useEffect(() => { setListPage(1); }, [page]);
-  useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null, isList: false, hasNext: false }); return; } let active = true; setState({ loading: true, error: '', records: null, isList: false, hasNext: false }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const separator = target.includes('?') ? '&' : '?'; const data = await api(`${target}${separator}page=${listPage}&pageSize=${pageSize}`); const isList = Array.isArray(data); if (active) setState({ loading: false, error: '', records: isList ? data : [data], isList, hasNext: isList && data.length === pageSize }); } catch (error) { if (error.message.includes('401')) { sessionStorage.removeItem('accessToken'); sessionStorage.removeItem('currentUser'); sessionStorage.removeItem(activePageStorageKey); onUnauthorized(false); } if (active) setState({ loading: false, error: error.message, records: null, isList: false, hasNext: false }); } }; load(); return () => { active = false; }; }, [page, listPage, onUnauthorized, reloadVersion]);
+  useEffect(() => { const route = routes[page]; if (!route && page !== 'Treatment history') { setState({ loading: false, error: '', records: null, isList: false, hasNext: false }); return; } let active = true; setState({ loading: true, error: '', records: null, isList: false, hasNext: false }); const load = async () => { try { let target = route; if (page === 'Treatment history') { const profile = await api('/api/profile/me'); target = `/api/patients/${profile.patientId}/history`; } const separator = target.includes('?') ? '&' : '?'; const data = await api(`${target}${separator}page=${listPage}&pageSize=${pageSize}`); const isList = Array.isArray(data); if (active) setState({ loading: false, error: '', records: isList ? data : [data], isList, hasNext: isList && data.length === pageSize }); } catch (error) { if (error.message.includes('401')) onUnauthorized(); if (active) setState({ loading: false, error: error.message, records: null, isList: false, hasNext: false }); } }; load(); return () => { active = false; }; }, [page, listPage, onUnauthorized, reloadVersion]);
   if (page === 'Dashboard') return <LiveDashboard role={role} />;
   if (role === 'Patient' && page === 'Profile') return <PatientProfileForm onNotice={onNotice} />;
   if (page === 'Book appointment') return <BookingForm onNotice={onNotice} />;
@@ -191,7 +193,7 @@ function DoctorAppointments({ onNotice, onUnauthorized }) {
       await load();
       onNotice(`Appointment ${decision}ed successfully.`);
     } catch (failure) {
-      if (failure.message.includes('session has expired')) onUnauthorized(false);
+      if (failure.message.includes('session has expired')) onUnauthorized();
       setDecisionError(failure.message);
     }
   };
