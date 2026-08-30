@@ -446,6 +446,69 @@ public sealed class AuthenticationEndpointTests
     }
 
     [Fact]
+    public async Task AdministratorCanUpdatePatientDoctorAndStaffProfilesWithoutDeletingClinicalRecords()
+    {
+        var email = NewTestEmail();
+        using var factory = new TestWebApplicationFactory();
+        using var patientClient = factory.CreateClient();
+        using var adminClient = factory.CreateClient();
+
+        try
+        {
+            var registrationResponse = await patientClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest { Email = email, Password = "AdministrationTestPassword!1" });
+            var registration = await registrationResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(registration);
+            patientClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", registration.AccessToken);
+            var patientProfileResponse = await patientClient.PutAsJsonAsync("/api/profile/me", new UpdatePatientProfileRequest { FirstName = "Administrative", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1), PhoneNumber = "555-0100" });
+            var patientProfile = await patientProfileResponse.Content.ReadFromJsonAsync<PatientProfileDto>();
+            Assert.Equal(HttpStatusCode.OK, patientProfileResponse.StatusCode);
+            Assert.NotNull(patientProfile);
+
+            var adminLogin = await adminClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "admin@hospital.example", Password = "DevelopmentOnly!123" });
+            var admin = await adminLogin.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(admin);
+            adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", admin.AccessToken);
+
+            var updatedPatientResponse = await adminClient.PutAsJsonAsync($"/api/admin/patients/{patientProfile.PatientId}", new UpdatePatientProfileRequest { FirstName = "Updated", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1), Address = "Updated address", EmergencyContactName = "Emergency contact" });
+            var updatedPatient = await updatedPatientResponse.Content.ReadFromJsonAsync<PatientProfileDto>();
+            Assert.Equal(HttpStatusCode.OK, updatedPatientResponse.StatusCode);
+            Assert.NotNull(updatedPatient);
+            Assert.Equal("Updated", updatedPatient.FirstName);
+            Assert.Equal("Updated address", updatedPatient.Address);
+
+            var doctors = await adminClient.GetFromJsonAsync<List<DoctorProfileDto>>("/api/admin/doctors?pageSize=100");
+            Assert.NotNull(doctors);
+            var doctor = doctors.First();
+            var updatedDoctorResponse = await adminClient.PutAsJsonAsync($"/api/admin/doctors/{doctor.DoctorId}", new UpdateDoctorProfileRequest { FirstName = doctor.FirstName, LastName = doctor.LastName, LicenseNumber = doctor.LicenseNumber, Specialization = doctor.Specialization, DepartmentId = doctor.DepartmentId, PhoneNumber = doctor.PhoneNumber, ConsultationFee = doctor.ConsultationFee, IsActive = doctor.IsActive });
+            var updatedDoctor = await updatedDoctorResponse.Content.ReadFromJsonAsync<DoctorProfileDto>();
+            Assert.Equal(HttpStatusCode.OK, updatedDoctorResponse.StatusCode);
+            Assert.NotNull(updatedDoctor);
+            Assert.Equal(doctor.DepartmentId, updatedDoctor.DepartmentId);
+
+            var staffMembers = await adminClient.GetFromJsonAsync<List<StaffProfileDto>>("/api/admin/staff?pageSize=100");
+            Assert.NotNull(staffMembers);
+            var staff = staffMembers.First();
+            var updatedStaffResponse = await adminClient.PutAsJsonAsync($"/api/admin/staff/{staff.StaffId}", new UpdateStaffProfileRequest { FirstName = staff.FirstName, LastName = staff.LastName, EmployeeNumber = staff.EmployeeNumber, JobTitle = staff.JobTitle, DepartmentId = staff.DepartmentId, PhoneNumber = staff.PhoneNumber, IsActive = staff.IsActive });
+            var updatedStaff = await updatedStaffResponse.Content.ReadFromJsonAsync<StaffProfileDto>();
+            Assert.Equal(HttpStatusCode.OK, updatedStaffResponse.StatusCode);
+            Assert.NotNull(updatedStaff);
+            Assert.Equal(staff.EmployeeNumber, updatedStaff.EmployeeNumber);
+
+            var blockedUpdate = await patientClient.PutAsJsonAsync($"/api/admin/patients/{patientProfile.PatientId}", new UpdatePatientProfileRequest { FirstName = "Blocked", LastName = "Patient", DateOfBirth = new DateOnly(1990, 1, 1) });
+            Assert.Equal(HttpStatusCode.Forbidden, blockedUpdate.StatusCode);
+
+            var statusResponse = await adminClient.PatchAsJsonAsync($"/api/admin/accounts/{registration.User.UserId}/status", new UpdateAccountStatusRequest { IsActive = false });
+            Assert.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
+            Assert.False((await statusResponse.Content.ReadFromJsonAsync<UserAccountDto>())!.IsActive);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await patientClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "AdministrationTestPassword!1" })).StatusCode);
+        }
+        finally
+        {
+            await DeleteUserAsync(factory, email);
+        }
+    }
+
+    [Fact]
     public async Task DepartmentAndDoctorCatalogSupportsSelectionAndAdministratorChanges()
     {
         var departmentCode = $"P6{Guid.NewGuid():N}"[..20].ToUpperInvariant();

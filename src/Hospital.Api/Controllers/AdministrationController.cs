@@ -30,6 +30,18 @@ public sealed class AdministrationController(IProfileService profileService, ICa
     public async Task<ActionResult<IReadOnlyList<DepartmentDto>>> GetDepartments([FromQuery] PaginationRequest pagination, CancellationToken cancellationToken) =>
         Ok(await catalogService.GetAllDepartmentsAsync(pagination, cancellationToken));
 
+    [HttpPut("patients/{patientId:int}")]
+    public async Task<ActionResult<PatientProfileDto>> UpdatePatient(int patientId, UpdatePatientProfileRequest request, CancellationToken cancellationToken) =>
+        Ok(await profileService.UpdatePatientAsync(patientId, request, cancellationToken));
+
+    [HttpPut("doctors/{doctorId:int}")]
+    public async Task<ActionResult<DoctorProfileDto>> UpdateDoctor(int doctorId, UpdateDoctorProfileRequest request, CancellationToken cancellationToken) =>
+        Ok(await profileService.UpdateDoctorAsync(doctorId, request, cancellationToken));
+
+    [HttpPut("staff/{staffId:int}")]
+    public async Task<ActionResult<StaffProfileDto>> UpdateStaff(int staffId, UpdateStaffProfileRequest request, CancellationToken cancellationToken) =>
+        Ok(await profileService.UpdateStaffAsync(staffId, request, cancellationToken));
+
     [HttpPatch("accounts/{userId:int}/status")]
     public async Task<ActionResult<UserAccountDto>> UpdateAccountStatus(int userId, UpdateAccountStatusRequest request, CancellationToken cancellationToken)
     {

@@ -21,11 +21,6 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
 
     public async Task<PatientProfileDto> UpdatePatientProfileAsync(int userId, UpdatePatientProfileRequest request, CancellationToken cancellationToken)
     {
-        if (request.DateOfBirth is null || request.DateOfBirth > DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime))
-        {
-            throw new ConflictException("Date of birth must not be in the future.");
-        }
-
         var patient = await dbContext.Patients.Include(candidate => candidate.User).SingleOrDefaultAsync(candidate => candidate.UserId == userId, cancellationToken);
         if (patient is null)
         {
@@ -38,6 +33,79 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
             dbContext.Patients.Add(patient);
         }
 
+        ApplyPatientUpdate(patient, request);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.Entry(patient).Reference(candidate => candidate.User).LoadAsync(cancellationToken);
+        return ToDto(patient);
+    }
+
+    public async Task<PatientProfileDto> UpdatePatientAsync(int patientId, UpdatePatientProfileRequest request, CancellationToken cancellationToken)
+    {
+        var patient = await dbContext.Patients.Include(candidate => candidate.User).SingleOrDefaultAsync(candidate => candidate.PatientId == patientId, cancellationToken) ?? throw new NotFoundException("Patient profile not found.");
+        ApplyPatientUpdate(patient, request);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDto(patient);
+    }
+
+    public async Task<DoctorProfileDto> UpdateDoctorAsync(int doctorId, UpdateDoctorProfileRequest request, CancellationToken cancellationToken)
+    {
+        var doctor = await dbContext.Doctors.Include(candidate => candidate.User).Include(candidate => candidate.Department).SingleOrDefaultAsync(candidate => candidate.DoctorId == doctorId, cancellationToken) ?? throw new NotFoundException("Doctor profile not found.");
+        var department = await dbContext.Departments.SingleOrDefaultAsync(candidate => candidate.DepartmentId == request.DepartmentId && candidate.IsActive, cancellationToken) ?? throw new NotFoundException("Active department not found.");
+        var licenseNumber = request.LicenseNumber.Trim();
+        if (await dbContext.Doctors.AnyAsync(candidate => candidate.DoctorId != doctorId && candidate.LicenseNumber == licenseNumber, cancellationToken))
+        {
+            throw new ConflictException("Another doctor already uses that license number.");
+        }
+
+        doctor.FirstName = request.FirstName.Trim();
+        doctor.LastName = request.LastName.Trim();
+        doctor.LicenseNumber = licenseNumber;
+        doctor.Specialization = request.Specialization.Trim();
+        doctor.DepartmentId = department.DepartmentId;
+        doctor.Department = department;
+        doctor.PhoneNumber = request.PhoneNumber?.Trim();
+        doctor.ConsultationFee = request.ConsultationFee;
+        doctor.IsActive = request.IsActive;
+        doctor.UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDto(doctor);
+    }
+
+    public async Task<StaffProfileDto> UpdateStaffAsync(int staffId, UpdateStaffProfileRequest request, CancellationToken cancellationToken)
+    {
+        var staff = await dbContext.Staff.Include(candidate => candidate.User).Include(candidate => candidate.Department).SingleOrDefaultAsync(candidate => candidate.StaffId == staffId, cancellationToken) ?? throw new NotFoundException("Staff profile not found.");
+        Department? department = null;
+        if (request.DepartmentId.HasValue)
+        {
+            department = await dbContext.Departments.SingleOrDefaultAsync(candidate => candidate.DepartmentId == request.DepartmentId.Value && candidate.IsActive, cancellationToken) ?? throw new NotFoundException("Active department not found.");
+        }
+
+        var employeeNumber = request.EmployeeNumber.Trim();
+        if (await dbContext.Staff.AnyAsync(candidate => candidate.StaffId != staffId && candidate.EmployeeNumber == employeeNumber, cancellationToken))
+        {
+            throw new ConflictException("Another staff member already uses that employee number.");
+        }
+
+        staff.FirstName = request.FirstName.Trim();
+        staff.LastName = request.LastName.Trim();
+        staff.EmployeeNumber = employeeNumber;
+        staff.JobTitle = request.JobTitle.Trim();
+        staff.DepartmentId = department?.DepartmentId;
+        staff.Department = department;
+        staff.PhoneNumber = request.PhoneNumber?.Trim();
+        staff.IsActive = request.IsActive;
+        staff.UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDto(staff);
+    }
+
+    private void ApplyPatientUpdate(Patient patient, UpdatePatientProfileRequest request)
+    {
+        if (request.DateOfBirth is null || request.DateOfBirth > DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime))
+        {
+            throw new ConflictException("Date of birth must not be in the future.");
+        }
+
         patient.FirstName = request.FirstName.Trim();
         patient.LastName = request.LastName.Trim();
         patient.DateOfBirth = request.DateOfBirth.Value;
@@ -47,9 +115,6 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
         patient.EmergencyContactName = request.EmergencyContactName?.Trim();
         patient.EmergencyContactPhone = request.EmergencyContactPhone?.Trim();
         patient.UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await dbContext.Entry(patient).Reference(candidate => candidate.User).LoadAsync(cancellationToken);
-        return ToDto(patient);
     }
 
     public async Task<IReadOnlyList<PatientProfileDto>> GetPatientsAsync(string? search, PaginationRequest pagination, CancellationToken cancellationToken)
@@ -85,7 +150,7 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
         return new UserAccountDto(user.UserId, user.Email, user.Role, user.IsActive, user.CreatedAt);
     }
 
-    private static PatientProfileDto ToDto(Patient patient) => new(patient.UserId, patient.PatientId, patient.User.Email, patient.MedicalRecordNumber, patient.FirstName, patient.LastName, patient.DateOfBirth, patient.Gender, patient.PhoneNumber, patient.Address, patient.EmergencyContactName, patient.EmergencyContactPhone);
-    private static DoctorProfileDto ToDto(Doctor doctor) => new(doctor.UserId, doctor.DoctorId, doctor.User.Email, doctor.FirstName, doctor.LastName, doctor.LicenseNumber, doctor.Specialization, doctor.Department.Name, doctor.PhoneNumber, doctor.ConsultationFee, doctor.IsActive, doctor.User.IsActive);
-    private static StaffProfileDto ToDto(Staff staff) => new(staff.UserId, staff.StaffId, staff.User.Email, staff.FirstName, staff.LastName, staff.EmployeeNumber, staff.JobTitle, staff.Department?.Name, staff.PhoneNumber, staff.IsActive, staff.User.IsActive);
+    private static PatientProfileDto ToDto(Patient patient) => new(patient.UserId, patient.PatientId, patient.User.Email, patient.MedicalRecordNumber, patient.FirstName, patient.LastName, patient.DateOfBirth, patient.Gender, patient.PhoneNumber, patient.Address, patient.EmergencyContactName, patient.EmergencyContactPhone, patient.User.IsActive);
+    private static DoctorProfileDto ToDto(Doctor doctor) => new(doctor.UserId, doctor.DoctorId, doctor.User.Email, doctor.FirstName, doctor.LastName, doctor.LicenseNumber, doctor.Specialization, doctor.DepartmentId, doctor.Department.Name, doctor.PhoneNumber, doctor.ConsultationFee, doctor.IsActive, doctor.User.IsActive);
+    private static StaffProfileDto ToDto(Staff staff) => new(staff.UserId, staff.StaffId, staff.User.Email, staff.FirstName, staff.LastName, staff.EmployeeNumber, staff.JobTitle, staff.DepartmentId, staff.Department?.Name, staff.PhoneNumber, staff.IsActive, staff.User.IsActive);
 }
