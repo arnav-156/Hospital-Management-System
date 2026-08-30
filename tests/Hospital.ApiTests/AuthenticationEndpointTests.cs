@@ -658,6 +658,21 @@ public sealed class AuthenticationEndpointTests
             Assert.NotNull(appointment);
             Assert.Equal(HttpStatusCode.Conflict, (await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = validSlot })).StatusCode);
 
+            var expiredReviewResponse = await patient.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest { DoctorId = 1, DepartmentId = 1, AppointmentDateTime = validSlot.AddHours(2), Reason = "Expired review test" });
+            var expiredReviewAppointment = await expiredReviewResponse.Content.ReadFromJsonAsync<AppointmentDto>();
+            Assert.Equal(HttpStatusCode.Created, expiredReviewResponse.StatusCode);
+            Assert.NotNull(expiredReviewAppointment);
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                var appointmentPastReviewWindow = await dbContext.Appointments.SingleAsync(item => item.AppointmentId == expiredReviewAppointment.AppointmentId);
+                appointmentPastReviewWindow.AppointmentDateTime = DateTime.UtcNow.AddMinutes(-2);
+                await dbContext.SaveChangesAsync();
+            }
+            Assert.Equal(HttpStatusCode.Conflict, (await doctor.PutAsJsonAsync($"/api/appointments/{expiredReviewAppointment.AppointmentId}/accept", new AppointmentDecisionRequest { Note = "Too late" })).StatusCode);
+            Assert.Equal(HttpStatusCode.Conflict, (await doctor.PutAsJsonAsync($"/api/appointments/{expiredReviewAppointment.AppointmentId}/reject", new AppointmentDecisionRequest { Note = "Too late" })).StatusCode);
+            Assert.Equal("Pending", (await patient.GetFromJsonAsync<AppointmentDto>($"/api/appointments/{expiredReviewAppointment.AppointmentId}"))!.Status);
+
             var rejected = await doctor.PutAsJsonAsync($"/api/appointments/{appointment.AppointmentId}/reject", new AppointmentDecisionRequest { Note = "Unavailable" });
             Assert.Equal(HttpStatusCode.OK, rejected.StatusCode);
             Assert.Equal("Rejected", (await rejected.Content.ReadFromJsonAsync<AppointmentDto>())!.Status);
