@@ -15,8 +15,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
 
-var connectionString = builder.Configuration.GetConnectionString("HospitalManagementDb")
-    ?? throw new InvalidOperationException("Connection string 'HospitalManagementDb' is required.");
+var connectionString = builder.Configuration.GetConnectionString("HospitalManagementDb");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'HospitalManagementDb' is required. Configure it in appsettings.Local.json for local development or through ConnectionStrings__HospitalManagementDb for automated environments.");
+}
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("JWT configuration is required.");
 

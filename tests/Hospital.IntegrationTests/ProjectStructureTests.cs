@@ -1,12 +1,13 @@
 ﻿using Hospital.Infrastructure.Data;
 using Hospital.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Hospital.IntegrationTests;
 
 public sealed class DatabaseFirstCrudTests
 {
-    private static readonly string ConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__HospitalManagementDb") ?? "Server=localhost,1433;Database=HospitalManagementDb;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True";
+    private static readonly string ConnectionString = ResolveConnectionString();
 
     [Fact]
     public async Task CanReadWriteUpdateAndDeleteEveryCoreEntity()
@@ -148,6 +149,36 @@ public sealed class DatabaseFirstCrudTests
         Role = role,
         IsActive = true,
     };
+
+    private static string ResolveConnectionString()
+    {
+        var apiProjectDirectory = Path.Combine(FindSolutionDirectory(), "src", "Hospital.Api");
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(apiProjectDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddJsonFile("appsettings.Local.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        var connectionString = configuration.GetConnectionString("HospitalManagementDb");
+        return !string.IsNullOrWhiteSpace(connectionString)
+            ? connectionString
+            : throw new InvalidOperationException("Connection string 'HospitalManagementDb' is required. Configure appsettings.Local.json for local tests or ConnectionStrings__HospitalManagementDb for automated environments.");
+    }
+
+    private static string FindSolutionDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "HospitalManagementSystem.sln")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the solution directory required to load the API test configuration.");
+    }
 
     private static async Task<int> CountCreatedEntitiesAsync(
         HospitalManagementDbContext context,

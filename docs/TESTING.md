@@ -20,3 +20,5 @@
 | Browser workflow | Passed with synthetic data; temporary records removed |
 
 Run all backend tests with `dotnet test HospitalManagementSystem.sln -m:1 -p:BuildInParallel=false -p:NuGetAudit=false`. Run `npm run build` from `client/hospital-web` for the frontend build.
+
+The API and integration tests load the same database configuration as the API: `src/Hospital.Api/appsettings.Local.json` for local development, or `ConnectionStrings__HospitalManagementDb` in CI and other automated environments. Configure one of these before running database-backed tests; the project intentionally has no default SQL Server connection string.
