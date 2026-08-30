@@ -21,6 +21,11 @@ public sealed class ProfileController(IProfileService profileService) : Controll
     public async Task<ActionResult<PatientProfileDto>> UpdatePatientProfile(UpdatePatientProfileRequest request, CancellationToken cancellationToken) =>
         Ok(await profileService.UpdatePatientProfileAsync(CurrentUserId, request, cancellationToken));
 
+    [Authorize(Roles = UserRoles.Doctor)]
+    [HttpPut("me/doctor")]
+    public async Task<ActionResult<DoctorProfileDto>> UpdateDoctorProfile(UpdateDoctorOwnProfileRequest request, CancellationToken cancellationToken) =>
+        Ok(await profileService.UpdateDoctorOwnProfileAsync(CurrentUserId, request, cancellationToken));
+
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, System.Globalization.CultureInfo.InvariantCulture);
     private string CurrentRole => User.FindFirstValue(ClaimTypes.Role)!;
 }

@@ -405,6 +405,54 @@ public sealed class AuthenticationEndpointTests
     }
 
     [Fact]
+    public async Task DoctorCanUpdateOnlyTheirOwnProfessionalProfile()
+    {
+        using var factory = new TestWebApplicationFactory();
+        using var doctorClient = factory.CreateClient();
+        using var patientClient = factory.CreateClient();
+        DoctorProfileDto? original = null;
+
+        try
+        {
+            var loginResponse = await doctorClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "dr.ada@hospital.example", Password = "DevelopmentOnly!123" });
+            var login = await loginResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+            Assert.NotNull(login);
+            doctorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+            original = await doctorClient.GetFromJsonAsync<DoctorProfileDto>("/api/profile/me");
+            Assert.NotNull(original);
+            var updatedResponse = await doctorClient.PutAsJsonAsync("/api/profile/me/doctor", new UpdateDoctorOwnProfileRequest { FirstName = original.FirstName, LastName = original.LastName, Specialization = original.Specialization, PhoneNumber = "555-0199", ConsultationFee = original.ConsultationFee });
+            var updated = await updatedResponse.Content.ReadFromJsonAsync<DoctorProfileDto>();
+
+            Assert.Equal(HttpStatusCode.OK, updatedResponse.StatusCode);
+            Assert.NotNull(updated);
+            Assert.Equal("555-0199", updated.PhoneNumber);
+            Assert.Equal(original.DepartmentId, updated.DepartmentId);
+            Assert.Equal(original.LicenseNumber, updated.LicenseNumber);
+
+            patientClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(UserRoles.Patient, DateTime.UtcNow.AddMinutes(10)));
+            var forbiddenResponse = await patientClient.PutAsJsonAsync("/api/profile/me/doctor", new UpdateDoctorOwnProfileRequest { FirstName = original.FirstName, LastName = original.LastName, Specialization = original.Specialization, ConsultationFee = original.ConsultationFee });
+            Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
+        }
+        finally
+        {
+            if (original is not null)
+            {
+                await using var scope = factory.Services.CreateAsyncScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                var doctor = await dbContext.Doctors.SingleAsync(candidate => candidate.DoctorId == original.DoctorId);
+                doctor.FirstName = original.FirstName;
+                doctor.LastName = original.LastName;
+                doctor.Specialization = original.Specialization;
+                doctor.PhoneNumber = original.PhoneNumber;
+                doctor.ConsultationFee = original.ConsultationFee;
+                await dbContext.SaveChangesAsync();
+            }
+        }
+    }
+
+    [Fact]
     public async Task AdministratorCanSearchProfilesAndDeactivateAnAccount()
     {
         var email = NewTestEmail();

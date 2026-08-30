@@ -39,6 +39,19 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
         return ToDto(patient);
     }
 
+    public async Task<DoctorProfileDto> UpdateDoctorOwnProfileAsync(int userId, UpdateDoctorOwnProfileRequest request, CancellationToken cancellationToken)
+    {
+        var doctor = await dbContext.Doctors.Include(candidate => candidate.User).Include(candidate => candidate.Department).SingleOrDefaultAsync(candidate => candidate.UserId == userId, cancellationToken) ?? throw new NotFoundException("Doctor profile not found.");
+        doctor.FirstName = request.FirstName.Trim();
+        doctor.LastName = request.LastName.Trim();
+        doctor.Specialization = request.Specialization.Trim();
+        doctor.PhoneNumber = request.PhoneNumber?.Trim();
+        doctor.ConsultationFee = request.ConsultationFee;
+        doctor.UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDto(doctor);
+    }
+
     public async Task<PatientProfileDto> UpdatePatientAsync(int patientId, UpdatePatientProfileRequest request, CancellationToken cancellationToken)
     {
         var patient = await dbContext.Patients.Include(candidate => candidate.User).SingleOrDefaultAsync(candidate => candidate.PatientId == patientId, cancellationToken) ?? throw new NotFoundException("Patient profile not found.");
