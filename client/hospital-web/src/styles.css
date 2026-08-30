@@ -29,6 +29,14 @@ textarea { min-height: 92px; }
 .link-button { padding: 0; border: 0; color: #167c80; background: transparent; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .table { border-top: 1px solid #e5edef; }
 .table > div { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 15px 0; border-bottom: 1px solid #e5edef; }
+.treatment-history { display: grid; gap: 14px; }
+.treatment-record { padding: 18px; border: 1px solid #e5edef; border-radius: 10px; background: #fbfdfd; }
+.treatment-record-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.treatment-record-heading h3 { margin: 0; }
+.treatment-record-heading p { margin: 4px 0 0; color: #627d82; }
+.treatment-record dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin: 18px 0 0; }
+.treatment-record dt { font-weight: 700; color: #3f5f65; }
+.treatment-record dd { margin: 4px 0 0; white-space: pre-wrap; }
 .pill { width: max-content; padding: 3px 9px; border-radius: 99px; color: #176d71; background: #e3f2f2; }
 .notice { padding: 12px; border-radius: 7px; color: #176d71; background: #e3f2f2; }
 .auth { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
