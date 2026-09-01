@@ -135,6 +135,99 @@ public sealed class AuthenticationEndpointTests
     }
 
     [Fact]
+    public async Task DoctorDashboardExcludesElapsedPendingAppointmentsFromReviewCount()
+    {
+        var reason = $"Elapsed dashboard review {Guid.NewGuid():N}";
+        using var factory = new TestWebApplicationFactory();
+        using var doctorClient = factory.CreateClient();
+
+        try
+        {
+            var loginResponse = await doctorClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "dr.ada@hospital.example", Password = "DevelopmentOnly!123" });
+            var doctor = await loginResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(doctor);
+            doctorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", doctor.AccessToken);
+
+            var before = await doctorClient.GetFromJsonAsync<DashboardSummaryDto>("/api/dashboard");
+            Assert.NotNull(before);
+
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+                var patientId = await dbContext.Patients.Select(patient => patient.PatientId).FirstAsync();
+                var doctorProfile = await dbContext.Doctors.SingleAsync(item => item.UserId == doctor.User.UserId);
+                dbContext.Appointments.Add(new Hospital.Infrastructure.Data.Entities.Appointment
+                {
+                    PatientId = patientId,
+                    DoctorId = doctorProfile.DoctorId,
+                    DepartmentId = doctorProfile.DepartmentId,
+                    AppointmentDateTime = DateTime.UtcNow.AddYears(-20).Date.AddHours(3),
+                    DurationMinutes = 30,
+                    Status = "Pending",
+                    Reason = reason,
+                    CreatedAt = DateTime.UtcNow,
+                });
+                await dbContext.SaveChangesAsync();
+            }
+
+            var after = await doctorClient.GetFromJsonAsync<DashboardSummaryDto>("/api/dashboard");
+
+            Assert.NotNull(after);
+            Assert.Equal(before.PendingReviews, after.PendingReviews);
+        }
+        finally
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+            dbContext.Appointments.RemoveRange(await dbContext.Appointments.Where(appointment => appointment.Reason == reason).ToListAsync());
+            await dbContext.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AdministratorCanCreateADoctorAccountAndProfile()
+    {
+        var email = NewTestEmail();
+        using var factory = new TestWebApplicationFactory();
+        using var admin = factory.CreateClient();
+        using var doctorClient = factory.CreateClient();
+
+        try
+        {
+            var loginResponse = await admin.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = "admin@hospital.example", Password = "DevelopmentOnly!123" });
+            var administrator = await loginResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.NotNull(administrator);
+            admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", administrator.AccessToken);
+
+            var createResponse = await admin.PostAsJsonAsync("/api/admin/doctors", new CreateDoctorProfileRequest
+            {
+                Email = email,
+                Password = "CreatedDoctorPassword!1",
+                FirstName = "Created",
+                LastName = "Doctor",
+                LicenseNumber = $"LIC-{Guid.NewGuid():N}",
+                Specialization = "General Medicine",
+                DepartmentId = 1,
+                ConsultationFee = 1200m,
+            });
+
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+            var created = await createResponse.Content.ReadFromJsonAsync<DoctorProfileDto>();
+            Assert.NotNull(created);
+            Assert.Equal(email, created.Email);
+            var doctorLoginResponse = await doctorClient.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = email, Password = "CreatedDoctorPassword!1" });
+            var doctor = await doctorLoginResponse.Content.ReadFromJsonAsync<AuthenticationResponse>();
+            Assert.Equal(HttpStatusCode.OK, doctorLoginResponse.StatusCode);
+            Assert.NotNull(doctor);
+            Assert.Equal(UserRoles.Doctor, doctor.User.Role);
+        }
+        finally
+        {
+            await DeleteDoctorUserAsync(factory, email);
+        }
+    }
+
+    [Fact]
     public async Task PatientAppointmentSummariesRemainReachableAfterTheFirstPage()
     {
         var email = NewTestEmail();
@@ -928,6 +1021,20 @@ public sealed class AuthenticationEndpointTests
             dbContext.Users.Remove(user);
             await dbContext.SaveChangesAsync();
         }
+    }
+
+    private static async Task DeleteDoctorUserAsync(WebApplicationFactory<Program> factory, string email)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<HospitalManagementDbContext>();
+        var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Email == email);
+        if (user is null) return;
+
+        dbContext.Notifications.RemoveRange(await dbContext.Notifications.Where(notification => notification.UserId == user.UserId).ToListAsync());
+        var doctor = await dbContext.Doctors.SingleOrDefaultAsync(candidate => candidate.UserId == user.UserId);
+        if (doctor is not null) dbContext.Doctors.Remove(doctor);
+        dbContext.Users.Remove(user);
+        await dbContext.SaveChangesAsync();
     }
 
     private static async Task DeleteDepartmentAsync(WebApplicationFactory<Program> factory, int departmentId)

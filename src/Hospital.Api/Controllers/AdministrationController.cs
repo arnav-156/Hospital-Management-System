@@ -22,6 +22,13 @@ public sealed class AdministrationController(IProfileService profileService, ICa
     public async Task<ActionResult<IReadOnlyList<DoctorProfileDto>>> GetDoctors([FromQuery] string? search, [FromQuery] PaginationRequest pagination, CancellationToken cancellationToken) =>
         Ok(await profileService.GetDoctorsAsync(search, pagination, cancellationToken));
 
+    [HttpPost("doctors")]
+    public async Task<ActionResult<DoctorProfileDto>> CreateDoctor(CreateDoctorProfileRequest request, CancellationToken cancellationToken)
+    {
+        var doctor = await profileService.CreateDoctorAsync(request, cancellationToken);
+        return Created($"/api/admin/doctors/{doctor.DoctorId}", doctor);
+    }
+
     [HttpGet("staff")]
     public async Task<ActionResult<IReadOnlyList<StaffProfileDto>>> GetStaff([FromQuery] string? search, [FromQuery] PaginationRequest pagination, CancellationToken cancellationToken) =>
         Ok(await profileService.GetStaffAsync(search, pagination, cancellationToken));

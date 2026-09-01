@@ -38,14 +38,15 @@ public sealed class DashboardService(HospitalManagementDbContext dbContext, Time
     {
         var doctorId = await dbContext.Doctors.AsNoTracking().Where(doctor => doctor.UserId == userId).Select(doctor => (int?)doctor.DoctorId).SingleOrDefaultAsync(cancellationToken)
             ?? throw new NotFoundException("Doctor profile not found.");
-        var monthStart = new DateTime(timeProvider.GetUtcNow().UtcDateTime.Year, timeProvider.GetUtcNow().UtcDateTime.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var monthEnd = monthStart.AddMonths(1);
 
         return new DashboardSummaryDto(
-            await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == doctorId && appointment.AppointmentDateTime > timeProvider.GetUtcNow().UtcDateTime && appointment.Status == "Accepted", cancellationToken),
+            await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == doctorId && appointment.AppointmentDateTime > now && appointment.Status == "Accepted", cancellationToken),
             await dbContext.Notifications.CountAsync(notification => notification.UserId == userId && !notification.IsRead, cancellationToken),
             0m,
-            await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == doctorId && appointment.Status == "Pending", cancellationToken),
+            await dbContext.Appointments.CountAsync(appointment => appointment.DoctorId == doctorId && appointment.AppointmentDateTime > now && appointment.Status == "Pending", cancellationToken),
             await dbContext.Appointments.Where(appointment => appointment.DoctorId == doctorId && appointment.AppointmentDateTime >= monthStart && appointment.AppointmentDateTime < monthEnd && appointment.Status != "Rejected" && appointment.Status != "Cancelled").Select(appointment => appointment.PatientId).Distinct().CountAsync(cancellationToken),
             0,
             0,

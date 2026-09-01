@@ -9,6 +9,7 @@ public interface IProfileService
     Task<PatientProfileDto> UpdatePatientProfileAsync(int userId, UpdatePatientProfileRequest request, CancellationToken cancellationToken);
     Task<DoctorProfileDto> UpdateDoctorOwnProfileAsync(int userId, UpdateDoctorOwnProfileRequest request, CancellationToken cancellationToken);
     Task<PatientProfileDto> UpdatePatientAsync(int patientId, UpdatePatientProfileRequest request, CancellationToken cancellationToken);
+    Task<DoctorProfileDto> CreateDoctorAsync(CreateDoctorProfileRequest request, CancellationToken cancellationToken);
     Task<DoctorProfileDto> UpdateDoctorAsync(int doctorId, UpdateDoctorProfileRequest request, CancellationToken cancellationToken);
     Task<StaffProfileDto> UpdateStaffAsync(int staffId, UpdateStaffProfileRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<PatientProfileDto>> GetPatientsAsync(string? search, PaginationRequest pagination, CancellationToken cancellationToken);

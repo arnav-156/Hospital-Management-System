@@ -5,11 +5,12 @@ using Hospital.Application.Interfaces;
 using Hospital.Application.Security;
 using Hospital.Infrastructure.Data;
 using Hospital.Infrastructure.Data.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hospital.Infrastructure.Services;
 
-public sealed class ProfileService(HospitalManagementDbContext dbContext, TimeProvider timeProvider) : IProfileService
+public sealed class ProfileService(HospitalManagementDbContext dbContext, TimeProvider timeProvider, IPasswordHasher<User> passwordHasher) : IProfileService
 {
     public async Task<object> GetCurrentProfileAsync(int userId, string role, CancellationToken cancellationToken) => role switch
     {
@@ -58,6 +59,57 @@ public sealed class ProfileService(HospitalManagementDbContext dbContext, TimePr
         ApplyPatientUpdate(patient, request);
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToDto(patient);
+    }
+
+    public async Task<DoctorProfileDto> CreateDoctorAsync(CreateDoctorProfileRequest request, CancellationToken cancellationToken)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+        var licenseNumber = request.LicenseNumber.Trim();
+        if (await dbContext.Users.AnyAsync(candidate => candidate.Email == email, cancellationToken))
+        {
+            throw new ConflictException("An account with this email address already exists.");
+        }
+        if (await dbContext.Doctors.AnyAsync(candidate => candidate.LicenseNumber == licenseNumber, cancellationToken))
+        {
+            throw new ConflictException("Another doctor already uses that license number.");
+        }
+
+        var department = await dbContext.Departments.SingleOrDefaultAsync(candidate => candidate.DepartmentId == request.DepartmentId && candidate.IsActive, cancellationToken)
+            ?? throw new NotFoundException("Active department not found.");
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var user = new User { Email = email, Role = UserRoles.Doctor, IsActive = true, CreatedAt = now };
+        user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var doctor = new Doctor
+        {
+            UserId = user.UserId,
+            User = user,
+            DepartmentId = department.DepartmentId,
+            Department = department,
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
+            LicenseNumber = licenseNumber,
+            Specialization = request.Specialization.Trim(),
+            PhoneNumber = request.PhoneNumber?.Trim(),
+            ConsultationFee = request.ConsultationFee,
+            IsActive = request.IsActive,
+            CreatedAt = now,
+        };
+        dbContext.Doctors.Add(doctor);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            throw new ConflictException("A doctor account with this email address or license number already exists.");
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return ToDto(doctor);
     }
 
     public async Task<DoctorProfileDto> UpdateDoctorAsync(int doctorId, UpdateDoctorProfileRequest request, CancellationToken cancellationToken)
